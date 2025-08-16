@@ -1,9 +1,6 @@
 def can_build(env, platform):
-    # For CoreText, we don't need FreeType dependency on macOS
-    if env.get("coretext", False) and platform == "macos":
-        env.module_add_dependencies("text_server_adv", ["msdfgen", "svg"], True)
-    else:
-        env.module_add_dependencies("text_server_adv", ["freetype", "msdfgen", "svg"], True)
+    # Always include FreeType dependency, CoreText is optional on macOS
+    env.module_add_dependencies("text_server_adv", ["freetype", "msdfgen", "svg"], True)
     return True
 
 

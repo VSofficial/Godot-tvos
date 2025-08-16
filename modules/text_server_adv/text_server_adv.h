@@ -107,7 +107,7 @@ using namespace godot;
 #include <unicode/ustring.h>
 #include <unicode/utypes.h>
 
-#if defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
+#ifdef MODULE_FREETYPE_ENABLED
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include FT_TRUETYPE_TABLES_H
@@ -189,13 +189,23 @@ class TextServerAdvanced : public TextServerExtension {
 
 	// Font cache data.
 
-#if defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
+#ifdef MODULE_FREETYPE_ENABLED
 	mutable FT_Library ft_library = nullptr;
 #endif
 
 #ifdef CORETEXT_ENABLED
 	// CoreText doesn't need a global library instance like FreeType
 #endif
+
+	// Runtime backend selection
+	mutable bool use_coretext_backend = false;
+	_FORCE_INLINE_ bool _should_use_coretext() const {
+#ifdef CORETEXT_ENABLED
+		return use_coretext_backend;
+#else
+		return false;
+#endif
+	}
 
 	const int rect_range = 1;
 
@@ -308,7 +318,7 @@ class TextServerAdvanced : public TextServerExtension {
 		HashMap<Vector2i, Vector2> kerning_map;
 		hb_font_t *hb_handle = nullptr;
 
-#if defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
+#ifdef MODULE_FREETYPE_ENABLED
 		FT_Face face = nullptr;
 		FT_StreamRec stream;
 #endif
@@ -322,7 +332,7 @@ class TextServerAdvanced : public TextServerExtension {
 			if (hb_handle != nullptr) {
 				hb_font_destroy(hb_handle);
 			}
-#if defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
+#ifdef MODULE_FREETYPE_ENABLED
 			if (face != nullptr) {
 				FT_Done_Face(face);
 			}
@@ -407,14 +417,14 @@ class TextServerAdvanced : public TextServerExtension {
 	};
 
 	_FORCE_INLINE_ FontTexturePosition find_texture_pos_for_glyph(FontForSizeAdvanced *p_data, int p_color_size, Image::Format p_image_format, int p_width, int p_height, bool p_msdf) const;
-#if defined(MODULE_MSDFGEN_ENABLED) && defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
+#if defined(MODULE_MSDFGEN_ENABLED) && defined(MODULE_FREETYPE_ENABLED)
 	_FORCE_INLINE_ FontGlyph rasterize_msdf(FontAdvanced *p_font_data, FontForSizeAdvanced *p_data, int p_pixel_range, int p_rect_margin, FT_Outline *p_outline, const Vector2 &p_advance) const;
 #endif
-#if defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
+#ifdef MODULE_FREETYPE_ENABLED
 	_FORCE_INLINE_ FontGlyph rasterize_bitmap(FontForSizeAdvanced *p_data, int p_rect_margin, FT_Bitmap p_bitmap, int p_yofs, int p_xofs, const Vector2 &p_advance, bool p_bgra) const;
 #endif
 #ifdef CORETEXT_ENABLED
-	_FORCE_INLINE_ FontGlyph rasterize_coretext_bitmap(FontForSizeAdvanced *p_data, int p_rect_margin, CGImageRef p_image, const Vector2 &p_advance) const;
+	_FORCE_INLINE_ FontGlyph rasterize_coretext_bitmap(FontForSizeAdvanced *p_data, int p_rect_margin, CGImageRef p_image, const Vector2 &p_advance, const CGRect &p_bbox) const;
 #endif
 	bool _ensure_glyph(FontAdvanced *p_font_data, const Vector2i &p_size, int32_t p_glyph, FontGlyph &r_glyph, uint32_t p_oversampling = 0) const;
 	bool _ensure_cache_for_size(FontAdvanced *p_font_data, const Vector2i &p_size, FontForSizeAdvanced *&r_cache_for_size, bool p_silent = false, uint32_t p_oversampling = 0) const;

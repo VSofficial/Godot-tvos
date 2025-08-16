@@ -11,7 +11,7 @@ env_text_server_adv = env_modules.Clone()
 # Thirdparty source files
 
 thirdparty_obj = []
-freetype_enabled = "freetype" in env.module_list and not env.get("coretext", False)
+freetype_enabled = "freetype" in env.module_list
 coretext_enabled = env.get("coretext", False) and env["platform"] == "macos"
 msdfgen_enabled = "msdfgen" in env.module_list
 
@@ -553,8 +553,8 @@ if env["builtin_freetype"] and freetype_enabled:
 if env["builtin_graphite"] and freetype_enabled and env["graphite"]:
     env_text_server_adv.Prepend(CPPEXTPATH=["#thirdparty/graphite/include"])
 
-if coretext_enabled:
-    # Exclude SVG-in-OT file when using CoreText since it depends on FreeType
+if coretext_enabled and not freetype_enabled:
+    # Exclude SVG-in-OT file when using CoreText without FreeType since it depends on FreeType
     source_files = Glob("*.cpp")
     filtered_sources = [f for f in source_files if not str(f).endswith("thorvg_svg_in_ot.cpp")]
     env_text_server_adv.add_source_files(module_obj, filtered_sources)

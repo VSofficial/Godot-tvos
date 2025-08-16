@@ -1213,7 +1213,7 @@ _FORCE_INLINE_ TextServerAdvanced::FontGlyph TextServerAdvanced::rasterize_bitma
 #ifdef CORETEXT_ENABLED
 _FORCE_INLINE_ TextServerAdvanced::FontGlyph TextServerAdvanced::rasterize_coretext_bitmap(FontForSizeAdvanced *p_data, int p_rect_margin, CGImageRef p_image, const Vector2 &p_advance, const CGRect &p_bbox) const {
 	FontGlyph chr;
-	chr.advance = p_advance * p_data->scale;
+	chr.advance = p_advance;
 	chr.found = true;
 
 	size_t w = CGImageGetWidth(p_image);
@@ -1352,7 +1352,7 @@ bool TextServerAdvanced::_ensure_glyph(FontAdvanced *p_font_data, const Vector2i
 					// Create bitmap from context
 					CGImageRef image = CGBitmapContextCreateImage(context);
 					if (image) {
-						gl = rasterize_coretext_bitmap(fd, 1, image, Vector2(advance.width, advance.height) * fd->scale, bbox);
+						gl = rasterize_coretext_bitmap(fd, 1, image, Vector2(advance.width, advance.height), bbox);
 						CGImageRelease(image);
 					}
 					
@@ -1361,7 +1361,7 @@ bool TextServerAdvanced::_ensure_glyph(FontAdvanced *p_font_data, const Vector2i
 				
 				if (!gl.found) {
 					// Fallback for failed rasterization
-					gl.advance = Vector2(advance.width, advance.height) * fd->scale;
+					gl.advance = Vector2(advance.width, advance.height);
 					gl.found = true;
 				}
 			} else {
@@ -1595,6 +1595,8 @@ bool TextServerAdvanced::_ensure_cache_for_size(FontAdvanced *p_font_data, const
 
 			// Create HarfBuzz font
 			fd->hb_handle = hb_coretext_font_create(fd->ct_font);
+			// Set HarfBuzz font scale - CoreText units need to be converted to HarfBuzz units (26.6 fractional pixels)
+			hb_font_set_scale(fd->hb_handle, sz * 64, sz * 64);
 
 			// Get font metrics
 			fd->ascent = CTFontGetAscent(fd->ct_font);

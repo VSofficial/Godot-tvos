@@ -1,14 +1,23 @@
 def can_build(env, platform):
-    env.module_add_dependencies("text_server_adv", ["freetype", "msdfgen", "svg"], True)
+    # For CoreText, we don't need FreeType dependency on macOS
+    if env.get("coretext", False) and platform == "macos":
+        env.module_add_dependencies("text_server_adv", ["msdfgen", "svg"], True)
+    else:
+        env.module_add_dependencies("text_server_adv", ["freetype", "msdfgen", "svg"], True)
     return True
 
 
 def get_opts(platform):
     from SCons.Variables import BoolVariable
 
-    return [
+    opts = [
         BoolVariable("graphite", "Enable SIL Graphite smart fonts support", True),
     ]
+    
+    if platform == "macos":
+        opts.append(BoolVariable("coretext", "Use Apple's CoreText instead of FreeType for font rendering", False))
+    
+    return opts
 
 
 def configure(env):

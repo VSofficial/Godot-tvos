@@ -65,7 +65,7 @@ using namespace godot;
 
 // Thirdparty headers.
 
-#ifdef MODULE_MSDFGEN_ENABLED
+#if defined(MODULE_MSDFGEN_ENABLED) && defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
 #include <core/EdgeHolder.h>
 #include <core/ShapeDistanceFinder.h>
 #include <core/contour-combiners.h>
@@ -74,7 +74,7 @@ using namespace godot;
 #endif
 
 #ifdef MODULE_SVG_ENABLED
-#ifdef MODULE_FREETYPE_ENABLED
+#if defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
 #include "thorvg_svg_in_ot.h"
 #endif
 #endif
@@ -353,10 +353,13 @@ bool TextServerAdvanced::_has_feature(Feature p_feature) const {
 		case FEATURE_KASHIDA_JUSTIFICATION:
 		case FEATURE_BREAK_ITERATORS:
 		case FEATURE_FONT_BITMAP:
-#ifdef MODULE_FREETYPE_ENABLED
+#if defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
 		case FEATURE_FONT_DYNAMIC:
 #endif
-#ifdef MODULE_MSDFGEN_ENABLED
+#ifdef CORETEXT_ENABLED
+		case FEATURE_FONT_DYNAMIC:
+#endif
+#if defined(MODULE_MSDFGEN_ENABLED) && defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
 		case FEATURE_FONT_MSDF:
 #endif
 		case FEATURE_FONT_VARIABLE:
@@ -381,10 +384,13 @@ String TextServerAdvanced::_get_name() const {
 
 int64_t TextServerAdvanced::_get_features() const {
 	int64_t interface_features = FEATURE_SIMPLE_LAYOUT | FEATURE_BIDI_LAYOUT | FEATURE_VERTICAL_LAYOUT | FEATURE_SHAPING | FEATURE_KASHIDA_JUSTIFICATION | FEATURE_BREAK_ITERATORS | FEATURE_FONT_BITMAP | FEATURE_FONT_VARIABLE | FEATURE_CONTEXT_SENSITIVE_CASE_CONVERSION | FEATURE_USE_SUPPORT_DATA;
-#ifdef MODULE_FREETYPE_ENABLED
+#if defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
 	interface_features |= FEATURE_FONT_DYNAMIC;
 #endif
-#ifdef MODULE_MSDFGEN_ENABLED
+#ifdef CORETEXT_ENABLED
+	interface_features |= FEATURE_FONT_DYNAMIC;
+#endif
+#if defined(MODULE_MSDFGEN_ENABLED) && defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
 	interface_features |= FEATURE_FONT_MSDF;
 #endif
 
@@ -905,7 +911,7 @@ _FORCE_INLINE_ TextServerAdvanced::FontTexturePosition TextServerAdvanced::find_
 	return ret;
 }
 
-#ifdef MODULE_MSDFGEN_ENABLED
+#if defined(MODULE_MSDFGEN_ENABLED) && defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
 
 struct MSContext {
 	msdfgen::Point2 position;
@@ -1088,7 +1094,7 @@ _FORCE_INLINE_ TextServerAdvanced::FontGlyph TextServerAdvanced::rasterize_msdf(
 }
 #endif
 
-#ifdef MODULE_FREETYPE_ENABLED
+#if defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
 _FORCE_INLINE_ TextServerAdvanced::FontGlyph TextServerAdvanced::rasterize_bitmap(FontForSizeAdvanced *p_data, int p_rect_margin, FT_Bitmap p_bitmap, int p_yofs, int p_xofs, const Vector2 &p_advance, bool p_bgra) const {
 	FontGlyph chr;
 	chr.advance = p_advance * p_data->scale;
@@ -1210,6 +1216,69 @@ _FORCE_INLINE_ TextServerAdvanced::FontGlyph TextServerAdvanced::rasterize_bitma
 }
 #endif
 
+#ifdef CORETEXT_ENABLED
+_FORCE_INLINE_ TextServerAdvanced::FontGlyph TextServerAdvanced::rasterize_coretext_bitmap(FontForSizeAdvanced *p_data, int p_rect_margin, CGImageRef p_image, const Vector2 &p_advance) const {
+	FontGlyph chr;
+	chr.advance = p_advance * p_data->scale;
+	chr.found = true;
+
+	size_t w = CGImageGetWidth(p_image);
+	size_t h = CGImageGetHeight(p_image);
+
+	if (w == 0 || h == 0) {
+		chr.texture_idx = -1;
+		chr.uv_rect = Rect2();
+		chr.rect = Rect2();
+		return chr;
+	}
+
+	int mw = w + p_rect_margin * 4;
+	int mh = h + p_rect_margin * 4;
+
+	FontTexturePosition tex_pos = find_texture_pos_for_glyph(p_data, 2, Image::FORMAT_LA8, mw, mh, false);
+	ERR_FAIL_COND_V(tex_pos.index < 0, FontGlyph());
+
+	// Ensure we have enough textures
+	if (tex_pos.index >= p_data->textures.size()) {
+		p_data->textures.resize(tex_pos.index + 1);
+	}
+
+	ShelfPackTexture &tex = p_data->textures.write[tex_pos.index];
+
+	if (!tex.image.is_valid()) {
+		tex.image.instantiate();
+		tex.image->initialize_data(tex.texture_w, tex.texture_h, false, Image::FORMAT_LA8);
+	}
+
+	// Get the image data from CoreGraphics
+	CFDataRef imageData = CGDataProviderCopyData(CGImageGetDataProvider(p_image));
+	if (imageData) {
+		const uint8_t *source_data = CFDataGetBytePtr(imageData);
+		size_t bytes_per_row = CGImageGetBytesPerRow(p_image);
+
+		// Copy the CoreText rendered glyph to our texture
+		for (int y = 0; y < h; y++) {
+			for (int x = 0; x < w; x++) {
+				int src_index = y * bytes_per_row + x;
+				uint8_t alpha = source_data[src_index];
+				
+				tex.image->set_pixel(tex_pos.x + x + p_rect_margin, tex_pos.y + y + p_rect_margin, Color(1.0, 1.0, 1.0, alpha / 255.0));
+			}
+		}
+
+		CFRelease(imageData);
+	}
+
+	tex.dirty = true;
+
+	chr.texture_idx = tex_pos.index;
+	chr.uv_rect = Rect2(tex_pos.x + p_rect_margin, tex_pos.y + p_rect_margin, w + p_rect_margin * 2, h + p_rect_margin * 2);
+	chr.rect.position = Vector2(-p_rect_margin, -p_rect_margin) * p_data->scale;
+	chr.rect.size = chr.uv_rect.size * p_data->scale;
+	return chr;
+}
+#endif
+
 /*************************************************************************/
 /* Font Cache                                                            */
 /*************************************************************************/
@@ -1232,7 +1301,7 @@ bool TextServerAdvanced::_ensure_glyph(FontAdvanced *p_font_data, const Vector2i
 		return true;
 	}
 
-#ifdef MODULE_FREETYPE_ENABLED
+#if defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
 	FontGlyph gl;
 	if (fd->face) {
 		FT_Int32 flags = FT_LOAD_DEFAULT;
@@ -1332,7 +1401,7 @@ bool TextServerAdvanced::_ensure_glyph(FontAdvanced *p_font_data, const Vector2i
 			}
 			if (!error) {
 				if (p_font_data->msdf) {
-#ifdef MODULE_MSDFGEN_ENABLED
+#if defined(MODULE_MSDFGEN_ENABLED) && defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
 					gl = rasterize_msdf(p_font_data, fd, p_font_data->msdf_range, rect_range, &slot->outline, Vector2((h + (1 << 9)) >> 10, (v + (1 << 9)) >> 10) / 64.0);
 #else
 					fd->glyph_map[p_glyph] = FontGlyph();
@@ -1376,6 +1445,57 @@ bool TextServerAdvanced::_ensure_glyph(FontAdvanced *p_font_data, const Vector2i
 		return gl.found;
 	}
 #endif
+
+#ifdef CORETEXT_ENABLED
+	FontGlyph gl;
+	if (fd->ct_font) {
+		CGGlyph cg_glyph = (CGGlyph)glyph_index;
+		CGSize advance;
+		CTFontGetAdvancesForGlyphs(fd->ct_font, kCTFontOrientationDefault, &cg_glyph, &advance, 1);
+		
+		// Get glyph bounding box
+		CGRect bbox;
+		CTFontGetBoundingRectsForGlyphs(fd->ct_font, kCTFontOrientationDefault, &cg_glyph, &bbox, 1);
+		
+		if (bbox.size.width > 0 && bbox.size.height > 0) {
+			// Create bitmap context to render glyph
+			int width = (int)ceil(bbox.size.width) + 4; // Add padding
+			int height = (int)ceil(bbox.size.height) + 4;
+			
+			CGColorSpaceRef colorSpace = CGColorSpaceCreateWithName(kCGColorSpaceGenericGray);
+			CGContextRef context = CGBitmapContextCreate(nullptr, width, height, 8, width, colorSpace, kCGImageAlphaOnly);
+			CGColorSpaceRelease(colorSpace);
+			
+			if (context) {
+				// Set up context for rendering
+				CGContextSetTextMatrix(context, CGAffineTransformIdentity);
+				CGContextSetTextDrawingMode(context, kCGTextFill);
+				CGContextSetRGBFillColor(context, 1.0, 1.0, 1.0, 1.0);
+				
+				// Position and render the glyph
+				CGPoint position = CGPointMake(-bbox.origin.x + 2, -bbox.origin.y + 2);
+				CTFontDrawGlyphs(fd->ct_font, &cg_glyph, &position, 1, context);
+				
+				// Create CGImage from context
+				CGImageRef image = CGBitmapContextCreateImage(context);
+				CGContextRelease(context);
+				
+				if (image) {
+					gl = rasterize_coretext_bitmap(fd, rect_range, image, Vector2(advance.width, advance.height));
+					CGImageRelease(image);
+				}
+			}
+		} else {
+			// Handle zero-size glyphs (like spaces)
+			gl.advance = Vector2(advance.width, advance.height) * fd->scale;
+			gl.found = true;
+		}
+		
+		E = fd->glyph_map.insert(p_glyph, gl);
+		r_glyph = E->value;
+		return gl.found;
+	}
+#endif
 	E = fd->glyph_map.insert(p_glyph, FontGlyph());
 	r_glyph = E->value;
 	return false;
@@ -1401,7 +1521,7 @@ bool TextServerAdvanced::_ensure_cache_for_size(FontAdvanced *p_font_data, const
 	fd->size = p_size;
 	if (p_font_data->data_ptr && (p_font_data->data_size > 0)) {
 		// Init dynamic font.
-#ifdef MODULE_FREETYPE_ENABLED
+#if defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
 		int error = 0;
 		{
 			MutexLock ftlock(ft_mutex);
@@ -1918,12 +2038,147 @@ bool TextServerAdvanced::_ensure_cache_for_size(FontAdvanced *p_font_data, const
 			hb_font_set_variations(fd->hb_handle, hb_vars.is_empty() ? nullptr : &hb_vars[0], hb_vars.size());
 			FT_Done_MM_Var(ft_library, amaster);
 		}
+#endif
+
+#ifdef CORETEXT_ENABLED
+		// Create CoreText font from data
+		CFDataRef font_data = CFDataCreate(nullptr, (const UInt8 *)p_font_data->data_ptr, p_font_data->data_size);
+		if (!font_data) {
+			memdelete(fd);
+			if (p_silent) {
+				return false;
+			} else {
+				ERR_FAIL_V_MSG(false, "CoreText: Failed to create font data!");
+			}
+		}
+
+		fd->cg_font = CGFontCreateWithDataProvider(CGDataProviderCreateWithCFData(font_data));
+		CFRelease(font_data);
+
+		if (!fd->cg_font) {
+			memdelete(fd);
+			if (p_silent) {
+				return false;
+			} else {
+				ERR_FAIL_V_MSG(false, "CoreText: Failed to create CGFont!");
+			}
+		}
+
+		double sz = double(fd->size.x) / 64.0;
+		if (p_font_data->msdf) {
+			sz = p_font_data->msdf_source_size;
+		}
+
+		fd->ct_font = CTFontCreateWithGraphicsFont(fd->cg_font, sz, nullptr, nullptr);
+		if (!fd->ct_font) {
+			CFRelease(fd->cg_font);
+			fd->cg_font = nullptr;
+			memdelete(fd);
+			if (p_silent) {
+				return false;
+			} else {
+				ERR_FAIL_V_MSG(false, "CoreText: Failed to create CTFont!");
+			}
+		}
+
+		fd->scale = 1.0; // CoreText handles scaling internally
+
+		// Create HarfBuzz font
+		fd->hb_handle = hb_coretext_font_create(fd->ct_font);
+
+		// Get font metrics
+		fd->ascent = CTFontGetAscent(fd->ct_font);
+		fd->descent = CTFontGetDescent(fd->ct_font);
+		fd->underline_position = -CTFontGetUnderlinePosition(fd->ct_font);
+		fd->underline_thickness = CTFontGetUnderlineThickness(fd->ct_font);
+
+		if (!p_font_data->face_init) {
+			// Get font name
+			CFStringRef font_name = CTFontCopyFamilyName(fd->ct_font);
+			if (font_name) {
+				char buffer[256];
+				if (CFStringGetCString(font_name, buffer, sizeof(buffer), kCFStringEncodingUTF8)) {
+					p_font_data->font_name = String::utf8(buffer);
+				}
+				CFRelease(font_name);
+			}
+
+			// Get style name
+			CFStringRef style_name = CTFontCopyName(fd->ct_font, kCTFontStyleNameKey);
+			if (style_name) {
+				char buffer[256];
+				if (CFStringGetCString(style_name, buffer, sizeof(buffer), kCFStringEncodingUTF8)) {
+					p_font_data->style_name = String::utf8(buffer);
+				}
+				CFRelease(style_name);
+			}
+
+			// Get font weight and style flags
+			p_font_data->weight = _font_get_weight_by_name(p_font_data->style_name.to_lower());
+			p_font_data->stretch = _font_get_stretch_by_name(p_font_data->style_name.to_lower());
+			p_font_data->style_flags = 0;
+
+			CTFontSymbolicTraits traits = CTFontGetSymbolicTraits(fd->ct_font);
+			if (traits & kCTFontTraitBold) {
+				p_font_data->style_flags.set_flag(FONT_BOLD);
+			}
+			if (traits & kCTFontTraitItalic) {
+				p_font_data->style_flags.set_flag(FONT_ITALIC);
+			}
+			if (traits & kCTFontTraitMonoSpace) {
+				p_font_data->style_flags.set_flag(FONT_FIXED_WIDTH);
+			}
+
+			// Get supported scripts using HarfBuzz
+			hb_face_t *hb_face = hb_font_get_face(fd->hb_handle);
+			p_font_data->supported_scripts.clear();
+			unsigned int count = hb_ot_layout_table_get_script_tags(hb_face, HB_OT_TAG_GSUB, 0, nullptr, nullptr);
+			if (count != 0) {
+				hb_tag_t *script_tags = (hb_tag_t *)memalloc(count * sizeof(hb_tag_t));
+				hb_ot_layout_table_get_script_tags(hb_face, HB_OT_TAG_GSUB, 0, &count, script_tags);
+				for (unsigned int i = 0; i < count; i++) {
+					p_font_data->supported_scripts.insert(script_tags[i]);
+				}
+				memfree(script_tags);
+			}
+			count = hb_ot_layout_table_get_script_tags(hb_face, HB_OT_TAG_GPOS, 0, nullptr, nullptr);
+			if (count != 0) {
+				hb_tag_t *script_tags = (hb_tag_t *)memalloc(count * sizeof(hb_tag_t));
+				hb_ot_layout_table_get_script_tags(hb_face, HB_OT_TAG_GPOS, 0, &count, script_tags);
+				for (unsigned int i = 0; i < count; i++) {
+					p_font_data->supported_scripts.insert(script_tags[i]);
+				}
+				memfree(script_tags);
+			}
+
+			// Get supported features
+			count = hb_ot_layout_table_get_feature_tags(hb_face, HB_OT_TAG_GSUB, 0, nullptr, nullptr);
+			if (count != 0) {
+				hb_tag_t *feature_tags = (hb_tag_t *)memalloc(count * sizeof(hb_tag_t));
+				hb_ot_layout_table_get_feature_tags(hb_face, HB_OT_TAG_GSUB, 0, &count, feature_tags);
+				for (unsigned int i = 0; i < count; i++) {
+					p_font_data->supported_features[feature_tags[i]] = 1;
+				}
+				memfree(feature_tags);
+			}
+			count = hb_ot_layout_table_get_feature_tags(hb_face, HB_OT_TAG_GPOS, 0, nullptr, nullptr);
+			if (count != 0) {
+				hb_tag_t *feature_tags = (hb_tag_t *)memalloc(count * sizeof(hb_tag_t));
+				hb_ot_layout_table_get_feature_tags(hb_face, HB_OT_TAG_GPOS, 0, &count, feature_tags);
+				for (unsigned int i = 0; i < count; i++) {
+					p_font_data->supported_features[feature_tags[i]] = 1;
+				}
+				memfree(feature_tags);
+			}
+
+			p_font_data->face_init = true;
+		}
 #else
 		memdelete(fd);
 		if (p_silent) {
 			return false;
 		} else {
-			ERR_FAIL_V_MSG(false, "FreeType: Can't load dynamic font, engine is compiled without FreeType support!");
+			ERR_FAIL_V_MSG(false, "CoreText: Can't load dynamic font, engine is compiled without CoreText support!");
 		}
 #endif
 	} else {
@@ -2096,7 +2351,7 @@ int64_t TextServerAdvanced::_font_get_face_count(const RID &p_font_rid) const {
 
 	if (fd->data_ptr && (fd->data_size > 0)) {
 		// Init dynamic font.
-#ifdef MODULE_FREETYPE_ENABLED
+#if defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
 		int error = 0;
 		if (!ft_library) {
 			error = FT_Init_FreeType(&ft_library);
@@ -2126,6 +2381,24 @@ int64_t TextServerAdvanced::_font_get_face_count(const RID &p_font_rid) const {
 		if (error == 0) {
 			face_count = tmp_face->num_faces;
 			FT_Done_Face(tmp_face);
+		}
+#endif
+
+#ifdef CORETEXT_ENABLED
+		// CoreText typically doesn't have multiple faces in a single font file
+		// but we can check by attempting to create the font
+		CFDataRef font_data = CFDataCreate(nullptr, (const UInt8 *)fd->data_ptr, fd->data_size);
+		if (font_data) {
+			CGDataProviderRef data_provider = CGDataProviderCreateWithCFData(font_data);
+			if (data_provider) {
+				CGFontRef cg_font = CGFontCreateWithDataProvider(data_provider);
+				if (cg_font) {
+					face_count = 1; // CoreText fonts typically have 1 face
+					CFRelease(cg_font);
+				}
+				CFRelease(data_provider);
+			}
+			CFRelease(font_data);
 		}
 #endif
 	}
@@ -2976,8 +3249,13 @@ void TextServerAdvanced::_font_set_scale(const RID &p_font_rid, int64_t p_size, 
 	FontForSizeAdvanced *ffsd = nullptr;
 	ERR_FAIL_COND(!_ensure_cache_for_size(fd, size, ffsd));
 
-#ifdef MODULE_FREETYPE_ENABLED
+#if defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
 	if (ffsd->face) {
+		return; // Do not override scale for dynamic fonts, it's calculated automatically.
+	}
+#endif
+#ifdef CORETEXT_ENABLED
+	if (ffsd->ct_font) {
 		return; // Do not override scale for dynamic fonts, it's calculated automatically.
 	}
 #endif
@@ -3551,7 +3829,7 @@ Dictionary TextServerAdvanced::_font_get_glyph_contours(const RID &p_font_rid, i
 	FontForSizeAdvanced *ffsd = nullptr;
 	ERR_FAIL_COND_V(!_ensure_cache_for_size(fd, size, ffsd), Dictionary());
 
-#ifdef MODULE_FREETYPE_ENABLED
+#if defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
 	PackedVector3Array points;
 	PackedInt32Array contours;
 
@@ -3676,7 +3954,7 @@ Vector2 TextServerAdvanced::_font_get_kerning(const RID &p_font_rid, int64_t p_s
 			return kern[p_glyph_pair];
 		}
 	} else {
-#ifdef MODULE_FREETYPE_ENABLED
+#if defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
 		if (ffsd->face) {
 			FT_Vector delta;
 			FT_Get_Kerning(ffsd->face, p_glyph_pair.x, p_glyph_pair.y, FT_KERNING_DEFAULT, &delta);
@@ -3708,7 +3986,7 @@ int64_t TextServerAdvanced::_font_get_glyph_index(const RID &p_font_rid, int64_t
 	FontForSizeAdvanced *ffsd = nullptr;
 	ERR_FAIL_COND_V(!_ensure_cache_for_size(fd, size, ffsd), 0);
 
-#ifdef MODULE_FREETYPE_ENABLED
+#if defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
 	if (ffsd->face) {
 		if (p_variation_selector) {
 			return FT_Face_GetCharVariantIndex(ffsd->face, p_char, p_variation_selector);
@@ -3732,7 +4010,7 @@ int64_t TextServerAdvanced::_font_get_char_from_glyph_index(const RID &p_font_ri
 	FontForSizeAdvanced *ffsd = nullptr;
 	ERR_FAIL_COND_V(!_ensure_cache_for_size(fd, size, ffsd), 0);
 
-#ifdef MODULE_FREETYPE_ENABLED
+#if defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
 	if (ffsd->inv_glyph_map.is_empty()) {
 		FT_Face face = ffsd->face;
 		FT_UInt gindex;
@@ -3770,7 +4048,7 @@ bool TextServerAdvanced::_font_has_char(const RID &p_font_rid, int64_t p_char) c
 		ffsd = fd->cache.begin()->value;
 	}
 
-#ifdef MODULE_FREETYPE_ENABLED
+#if defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
 	if (ffsd->face) {
 		return FT_Get_Char_Index(ffsd->face, p_char) != 0;
 	}
@@ -3791,7 +4069,7 @@ String TextServerAdvanced::_font_get_supported_chars(const RID &p_font_rid) cons
 	}
 
 	String chars;
-#ifdef MODULE_FREETYPE_ENABLED
+#if defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
 	if (ffsd->face) {
 		FT_UInt gindex;
 		FT_ULong charcode = FT_Get_First_Char(ffsd->face, &gindex);
@@ -3824,7 +4102,7 @@ PackedInt32Array TextServerAdvanced::_font_get_supported_glyphs(const RID &p_fon
 	}
 
 	PackedInt32Array glyphs;
-#ifdef MODULE_FREETYPE_ENABLED
+#if defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
 	if (at_size && at_size->face) {
 		FT_UInt gindex;
 		FT_ULong charcode = FT_Get_First_Char(at_size->face, &gindex);
@@ -3855,7 +4133,7 @@ void TextServerAdvanced::_font_render_range(const RID &p_font_rid, const Vector2
 	FontForSizeAdvanced *ffsd = nullptr;
 	ERR_FAIL_COND(!_ensure_cache_for_size(fd, size, ffsd));
 	for (int64_t i = p_start; i <= p_end; i++) {
-#ifdef MODULE_FREETYPE_ENABLED
+#if defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
 		int32_t idx = FT_Get_Char_Index(ffsd->face, i);
 		if (ffsd->face) {
 			FontGlyph fgl;
@@ -3889,7 +4167,7 @@ void TextServerAdvanced::_font_render_glyph(const RID &p_font_rid, const Vector2
 	Vector2i size = _get_size_outline(fd, p_size);
 	FontForSizeAdvanced *ffsd = nullptr;
 	ERR_FAIL_COND(!_ensure_cache_for_size(fd, size, ffsd));
-#ifdef MODULE_FREETYPE_ENABLED
+#if defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
 	int32_t idx = p_index & 0xffffff; // Remove subpixel shifts.
 	if (ffsd->face) {
 		FontGlyph fgl;
@@ -3957,7 +4235,7 @@ void TextServerAdvanced::_font_draw_glyph(const RID &p_font_rid, const RID &p_ca
 	int32_t index = p_index & 0xffffff; // Remove subpixel shifts.
 	bool lcd_aa = false;
 
-#ifdef MODULE_FREETYPE_ENABLED
+#if defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
 	if (!fd->msdf && ffsd->face) {
 		// LCD layout, bits 24, 25, 26
 		if (fd->antialiasing == FONT_ANTIALIASING_LCD) {
@@ -3988,7 +4266,7 @@ void TextServerAdvanced::_font_draw_glyph(const RID &p_font_rid, const RID &p_ca
 
 		if (fgl.texture_idx != -1) {
 			Color modulate = p_color;
-#ifdef MODULE_FREETYPE_ENABLED
+#if defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
 			if (!fd->modulate_color_glyphs && ffsd->face && ffsd->textures[fgl.texture_idx].image.is_valid() && (ffsd->textures[fgl.texture_idx].image->get_format() == Image::FORMAT_RGBA8) && !lcd_aa && !fd->msdf) {
 				modulate.r = modulate.g = modulate.b = 1.0;
 			}
@@ -4103,7 +4381,7 @@ void TextServerAdvanced::_font_draw_glyph_outline(const RID &p_font_rid, const R
 	int32_t index = p_index & 0xffffff; // Remove subpixel shifts.
 	bool lcd_aa = false;
 
-#ifdef MODULE_FREETYPE_ENABLED
+#if defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
 	if (!fd->msdf && ffsd->face) {
 		// LCD layout, bits 24, 25, 26
 		if (fd->antialiasing == FONT_ANTIALIASING_LCD) {
@@ -4134,7 +4412,7 @@ void TextServerAdvanced::_font_draw_glyph_outline(const RID &p_font_rid, const R
 
 		if (fgl.texture_idx != -1) {
 			Color modulate = p_color;
-#ifdef MODULE_FREETYPE_ENABLED
+#if defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
 			if (ffsd->face && fd->cache[size]->textures[fgl.texture_idx].image.is_valid() && (ffsd->textures[fgl.texture_idx].image->get_format() == Image::FORMAT_RGBA8) && !lcd_aa && !fd->msdf) {
 				modulate.r = modulate.g = modulate.b = 1.0;
 			}
@@ -8203,7 +8481,7 @@ void TextServerAdvanced::_cleanup() {
 
 TextServerAdvanced::~TextServerAdvanced() {
 	_bmp_free_font_funcs();
-#ifdef MODULE_FREETYPE_ENABLED
+#if defined(MODULE_FREETYPE_ENABLED) && !defined(CORETEXT_ENABLED)
 	if (ft_library != nullptr) {
 		FT_Done_FreeType(ft_library);
 	}

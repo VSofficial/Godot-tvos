@@ -1552,18 +1552,19 @@ bool TextServerAdvanced::_ensure_cache_for_size(FontAdvanced *p_font_data, const
 #ifdef CORETEXT_ENABLED
 			// Use CoreText backend
 			// Create CoreText font from data
-			CFDataRef font_data = CFDataCreate(nullptr, (const UInt8 *)p_font_data->data_ptr, p_font_data->data_size);
-			if (!font_data) {
+			CGDataProviderRef data_provider = CGDataProviderCreateWithData(nullptr, p_font_data->data_ptr, p_font_data->data_size, nullptr);
+			printf("Created a data provider with size: %zu bytes\n", p_font_data->data_size);
+			if (!data_provider) {
 				memdelete(fd);
 				if (p_silent) {
 					return false;
 				} else {
-					ERR_FAIL_V_MSG(false, "CoreText: Failed to create font data!");
+					ERR_FAIL_V_MSG(false, "CoreText: Failed to create data provider!");
 				}
 			}
 
-			fd->cg_font = CGFontCreateWithDataProvider(CGDataProviderCreateWithCFData(font_data));
-			CFRelease(font_data);
+			fd->cg_font = CGFontCreateWithDataProvider(data_provider);
+			CGDataProviderRelease(data_provider);
 
 			if (!fd->cg_font) {
 				memdelete(fd);

@@ -3664,3 +3664,368 @@ SystemFont::SystemFont() {
 
 SystemFont::~SystemFont() {
 }
+
+/*************************************************************************/
+/*  OperatingSystemFont                                                  */
+/*************************************************************************/
+
+void OperatingSystemFont::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("set_antialiasing", "antialiasing"), &OperatingSystemFont::set_antialiasing);
+	ClassDB::bind_method(D_METHOD("get_antialiasing"), &OperatingSystemFont::get_antialiasing);
+
+	ClassDB::bind_method(D_METHOD("set_disable_embedded_bitmaps", "disable_embedded_bitmaps"), &OperatingSystemFont::set_disable_embedded_bitmaps);
+	ClassDB::bind_method(D_METHOD("get_disable_embedded_bitmaps"), &OperatingSystemFont::get_disable_embedded_bitmaps);
+
+	ClassDB::bind_method(D_METHOD("set_generate_mipmaps", "generate_mipmaps"), &OperatingSystemFont::set_generate_mipmaps);
+	ClassDB::bind_method(D_METHOD("get_generate_mipmaps"), &OperatingSystemFont::get_generate_mipmaps);
+
+	ClassDB::bind_method(D_METHOD("set_allow_system_fallback", "allow_system_fallback"), &OperatingSystemFont::set_allow_system_fallback);
+	ClassDB::bind_method(D_METHOD("is_allow_system_fallback"), &OperatingSystemFont::is_allow_system_fallback);
+
+	ClassDB::bind_method(D_METHOD("set_force_autohinter", "force_autohinter"), &OperatingSystemFont::set_force_autohinter);
+	ClassDB::bind_method(D_METHOD("is_force_autohinter"), &OperatingSystemFont::is_force_autohinter);
+
+	ClassDB::bind_method(D_METHOD("set_modulate_color_glyphs", "modulate"), &OperatingSystemFont::set_modulate_color_glyphs);
+	ClassDB::bind_method(D_METHOD("is_modulate_color_glyphs"), &OperatingSystemFont::is_modulate_color_glyphs);
+
+	ClassDB::bind_method(D_METHOD("set_hinting", "hinting"), &OperatingSystemFont::set_hinting);
+	ClassDB::bind_method(D_METHOD("get_hinting"), &OperatingSystemFont::get_hinting);
+
+	ClassDB::bind_method(D_METHOD("set_subpixel_positioning", "subpixel_positioning"), &OperatingSystemFont::set_subpixel_positioning);
+	ClassDB::bind_method(D_METHOD("get_subpixel_positioning"), &OperatingSystemFont::get_subpixel_positioning);
+
+	ClassDB::bind_method(D_METHOD("set_keep_rounding_remainders", "keep_rounding_remainders"), &OperatingSystemFont::set_keep_rounding_remainders);
+	ClassDB::bind_method(D_METHOD("get_keep_rounding_remainders"), &OperatingSystemFont::get_keep_rounding_remainders);
+
+	ClassDB::bind_method(D_METHOD("set_multichannel_signed_distance_field", "msdf"), &OperatingSystemFont::set_multichannel_signed_distance_field);
+	ClassDB::bind_method(D_METHOD("is_multichannel_signed_distance_field"), &OperatingSystemFont::is_multichannel_signed_distance_field);
+
+	ClassDB::bind_method(D_METHOD("set_msdf_pixel_range", "msdf_pixel_range"), &OperatingSystemFont::set_msdf_pixel_range);
+	ClassDB::bind_method(D_METHOD("get_msdf_pixel_range"), &OperatingSystemFont::get_msdf_pixel_range);
+
+	ClassDB::bind_method(D_METHOD("set_msdf_size", "msdf_size"), &OperatingSystemFont::set_msdf_size);
+	ClassDB::bind_method(D_METHOD("get_msdf_size"), &OperatingSystemFont::get_msdf_size);
+
+	ClassDB::bind_method(D_METHOD("set_oversampling", "oversampling"), &OperatingSystemFont::set_oversampling);
+	ClassDB::bind_method(D_METHOD("get_oversampling"), &OperatingSystemFont::get_oversampling);
+
+	ClassDB::bind_method(D_METHOD("set_font_name", "name"), &OperatingSystemFont::set_font_name);
+
+	ClassDB::bind_method(D_METHOD("get_font_size"), &OperatingSystemFont::get_font_size);
+	ClassDB::bind_method(D_METHOD("set_font_size", "size"), &OperatingSystemFont::set_font_size);
+
+	ClassDB::bind_method(D_METHOD("get_font_italic"), &OperatingSystemFont::get_font_italic);
+	ClassDB::bind_method(D_METHOD("set_font_italic", "italic"), &OperatingSystemFont::set_font_italic);
+	ClassDB::bind_method(D_METHOD("set_font_weight", "weight"), &OperatingSystemFont::set_font_weight);
+	ClassDB::bind_method(D_METHOD("set_font_stretch", "stretch"), &OperatingSystemFont::set_font_stretch);
+
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "font_size", PROPERTY_HINT_RANGE, "1,256,1"), "set_font_size", "get_font_size");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "font_italic"), "set_font_italic", "get_font_italic");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "antialiasing", PROPERTY_HINT_ENUM, "None,Grayscale,LCD Subpixel", PROPERTY_USAGE_STORAGE), "set_antialiasing", "get_antialiasing");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "generate_mipmaps"), "set_generate_mipmaps", "get_generate_mipmaps");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "disable_embedded_bitmaps"), "set_disable_embedded_bitmaps", "get_disable_embedded_bitmaps");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "allow_system_fallback"), "set_allow_system_fallback", "is_allow_system_fallback");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "force_autohinter"), "set_force_autohinter", "is_force_autohinter");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "modulate_color_glyphs"), "set_modulate_color_glyphs", "is_modulate_color_glyphs");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "hinting", PROPERTY_HINT_ENUM, "None,Light,Normal"), "set_hinting", "get_hinting");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "subpixel_positioning", PROPERTY_HINT_ENUM, "Disabled,Auto,One Half of a Pixel,One Quarter of a Pixel"), "set_subpixel_positioning", "get_subpixel_positioning");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "keep_rounding_remainders"), "set_keep_rounding_remainders", "get_keep_rounding_remainders");
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "multichannel_signed_distance_field"), "set_multichannel_signed_distance_field", "is_multichannel_signed_distance_field");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "msdf_pixel_range"), "set_msdf_pixel_range", "get_msdf_pixel_range");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "msdf_size"), "set_msdf_size", "get_msdf_size");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "oversampling"), "set_oversampling", "get_oversampling");
+}
+
+void OperatingSystemFont::_update_rids() const {
+	rids.clear();
+	_update_os_font();
+	if (os_font_rid.is_valid()) {
+		rids.push_back(os_font_rid);
+	}
+	dirty_rids = false;
+}
+
+void OperatingSystemFont::_update_os_font() const {
+	// Only create if not already created
+	if (!os_font_rid.is_valid() && !font_name.is_empty()) {
+		os_font_rid = TS->create_font_system(font_name, antialiasing);
+		if (os_font_rid.is_valid()) {
+			TS->font_set_disable_embedded_bitmaps(os_font_rid, disable_embedded_bitmaps);
+			TS->font_set_generate_mipmaps(os_font_rid, mipmaps);
+			TS->font_set_force_autohinter(os_font_rid, force_autohinter);
+			TS->font_set_allow_system_fallback(os_font_rid, allow_system_fallback);
+			TS->font_set_modulate_color_glyphs(os_font_rid, modulate_color_glyphs);
+			TS->font_set_hinting(os_font_rid, hinting);
+			TS->font_set_subpixel_positioning(os_font_rid, subpixel_positioning);
+			TS->font_set_keep_rounding_remainders(os_font_rid, keep_rounding_remainders);
+			TS->font_set_oversampling(os_font_rid, oversampling_override);
+			TS->font_set_multichannel_signed_distance_field(os_font_rid, msdf);
+			TS->font_set_msdf_pixel_range(os_font_rid, msdf_pixel_range);
+			TS->font_set_msdf_size(os_font_rid, msdf_size);
+		}
+	}
+}
+
+void OperatingSystemFont::reset_state() {
+	if (os_font_rid.is_valid()) {
+		TS->free_rid(os_font_rid);
+		os_font_rid = RID();
+	}
+
+	if (theme_font.is_valid()) {
+		theme_font->disconnect_changed(callable_mp(reinterpret_cast<Font *>(this), &Font::_invalidate_rids));
+		theme_font.unref();
+	}
+
+	font_name = "";
+	font_size = 16;
+	italic = false;
+	weight = 400;
+	stretch = 100;
+
+	antialiasing = TextServer::FONT_ANTIALIASING_GRAY;
+	mipmaps = false;
+	disable_embedded_bitmaps = true;
+	force_autohinter = false;
+	modulate_color_glyphs = false;
+	allow_system_fallback = true;
+	hinting = TextServer::HINTING_LIGHT;
+	subpixel_positioning = TextServer::SUBPIXEL_POSITIONING_AUTO;
+	keep_rounding_remainders = true;
+	oversampling_override = 0.0;
+	msdf = false;
+	msdf_pixel_range = 16;
+	msdf_size = 48;
+
+	Font::reset_state();
+}
+
+void OperatingSystemFont::set_antialiasing(TextServer::FontAntialiasing p_antialiasing) {
+	if (antialiasing != p_antialiasing) {
+		antialiasing = p_antialiasing;
+		_invalidate_rids();
+	}
+}
+
+TextServer::FontAntialiasing OperatingSystemFont::get_antialiasing() const {
+	return antialiasing;
+}
+
+void OperatingSystemFont::set_disable_embedded_bitmaps(bool p_disable_embedded_bitmaps) {
+	if (disable_embedded_bitmaps != p_disable_embedded_bitmaps) {
+		disable_embedded_bitmaps = p_disable_embedded_bitmaps;
+		_invalidate_rids();
+	}
+}
+
+bool OperatingSystemFont::get_disable_embedded_bitmaps() const {
+	return disable_embedded_bitmaps;
+}
+
+void OperatingSystemFont::set_generate_mipmaps(bool p_generate_mipmaps) {
+	if (mipmaps != p_generate_mipmaps) {
+		mipmaps = p_generate_mipmaps;
+		_invalidate_rids();
+	}
+}
+
+bool OperatingSystemFont::get_generate_mipmaps() const {
+	return mipmaps;
+}
+
+void OperatingSystemFont::set_allow_system_fallback(bool p_allow_system_fallback) {
+	if (allow_system_fallback != p_allow_system_fallback) {
+		allow_system_fallback = p_allow_system_fallback;
+		_invalidate_rids();
+	}
+}
+
+bool OperatingSystemFont::is_allow_system_fallback() const {
+	return allow_system_fallback;
+}
+
+void OperatingSystemFont::set_force_autohinter(bool p_force_autohinter) {
+	if (force_autohinter != p_force_autohinter) {
+		force_autohinter = p_force_autohinter;
+		_invalidate_rids();
+	}
+}
+
+bool OperatingSystemFont::is_force_autohinter() const {
+	return force_autohinter;
+}
+
+void OperatingSystemFont::set_modulate_color_glyphs(bool p_modulate) {
+	if (modulate_color_glyphs != p_modulate) {
+		modulate_color_glyphs = p_modulate;
+		_invalidate_rids();
+	}
+}
+
+bool OperatingSystemFont::is_modulate_color_glyphs() const {
+	return modulate_color_glyphs;
+}
+
+void OperatingSystemFont::set_hinting(TextServer::Hinting p_hinting) {
+	if (hinting != p_hinting) {
+		hinting = p_hinting;
+		_invalidate_rids();
+	}
+}
+
+TextServer::Hinting OperatingSystemFont::get_hinting() const {
+	return hinting;
+}
+
+void OperatingSystemFont::set_subpixel_positioning(TextServer::SubpixelPositioning p_subpixel) {
+	if (subpixel_positioning != p_subpixel) {
+		subpixel_positioning = p_subpixel;
+		_invalidate_rids();
+	}
+}
+
+TextServer::SubpixelPositioning OperatingSystemFont::get_subpixel_positioning() const {
+	return subpixel_positioning;
+}
+
+void OperatingSystemFont::set_keep_rounding_remainders(bool p_keep_rounding_remainders) {
+	if (keep_rounding_remainders != p_keep_rounding_remainders) {
+		keep_rounding_remainders = p_keep_rounding_remainders;
+		_invalidate_rids();
+	}
+}
+
+bool OperatingSystemFont::get_keep_rounding_remainders() const {
+	return keep_rounding_remainders;
+}
+
+void OperatingSystemFont::set_oversampling(real_t p_oversampling) {
+	if (oversampling_override != p_oversampling) {
+		oversampling_override = p_oversampling;
+		_invalidate_rids();
+	}
+}
+
+real_t OperatingSystemFont::get_oversampling() const {
+	return oversampling_override;
+}
+
+void OperatingSystemFont::set_multichannel_signed_distance_field(bool p_msdf) {
+	if (msdf != p_msdf) {
+		msdf = p_msdf;
+		_invalidate_rids();
+	}
+}
+
+bool OperatingSystemFont::is_multichannel_signed_distance_field() const {
+	return msdf;
+}
+
+void OperatingSystemFont::set_msdf_pixel_range(int p_msdf_pixel_range) {
+	if (msdf_pixel_range != p_msdf_pixel_range) {
+		msdf_pixel_range = p_msdf_pixel_range;
+		_invalidate_rids();
+	}
+}
+
+int OperatingSystemFont::get_msdf_pixel_range() const {
+	return msdf_pixel_range;
+}
+
+void OperatingSystemFont::set_msdf_size(int p_msdf_size) {
+	if (msdf_size != p_msdf_size) {
+		msdf_size = p_msdf_size;
+		_invalidate_rids();
+	}
+}
+
+int OperatingSystemFont::get_msdf_size() const {
+	return msdf_size;
+}
+
+void OperatingSystemFont::set_font_name(const String &p_name) {
+	if (font_name != p_name) {
+		font_name = p_name;
+		_invalidate_rids();
+	}
+}
+
+String OperatingSystemFont::get_font_name() const {
+	return font_name;
+}
+
+void OperatingSystemFont::set_font_size(int p_size) {
+	if (font_size != p_size) {
+		font_size = p_size;
+		_invalidate_rids();
+	}
+}
+
+int OperatingSystemFont::get_font_size() const {
+	return font_size;
+}
+
+void OperatingSystemFont::set_font_italic(bool p_italic) {
+	if (italic != p_italic) {
+		italic = p_italic;
+		_invalidate_rids();
+	}
+}
+
+bool OperatingSystemFont::get_font_italic() const {
+	return italic;
+}
+
+void OperatingSystemFont::set_font_weight(int p_weight) {
+	if (weight != p_weight) {
+		weight = p_weight;
+		_invalidate_rids();
+	}
+}
+
+int OperatingSystemFont::get_font_weight() const {
+	return weight;
+}
+
+void OperatingSystemFont::set_font_stretch(int p_stretch) {
+	if (stretch != p_stretch) {
+		stretch = p_stretch;
+		_invalidate_rids();
+	}
+}
+
+int OperatingSystemFont::get_font_stretch() const {
+	return stretch;
+}
+
+int OperatingSystemFont::get_spacing(TextServer::SpacingType p_spacing) const {
+	return 0;
+}
+
+RID OperatingSystemFont::find_variation(const Dictionary &p_variation_coordinates, int p_face_index, float p_strength, Transform2D p_transform, int p_spacing_top, int p_spacing_bottom, int p_spacing_space, int p_spacing_glyph, float p_baseline_offset) const {
+	_update_os_font();
+	if (os_font_rid.is_valid()) {
+		// For now, return the base font directly to avoid variation issues
+		// TODO: Properly implement font variations for system fonts
+		return os_font_rid;
+	}
+	return RID();
+}
+
+RID OperatingSystemFont::_get_rid() const {
+	_update_os_font();
+	return os_font_rid;
+}
+
+int64_t OperatingSystemFont::get_face_count() const {
+	return 1;
+}
+
+OperatingSystemFont::OperatingSystemFont() {
+}
+
+OperatingSystemFont::~OperatingSystemFont() {
+	if (os_font_rid.is_valid()) {
+		TS->free_rid(os_font_rid);
+	}
+}

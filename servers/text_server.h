@@ -268,6 +268,7 @@ public:
 
 	virtual RID create_font() = 0;
 	virtual RID create_font_linked_variation(const RID &p_font_rid) = 0;
+	virtual RID create_font_system(const String &p_name, FontAntialiasing p_antialiasing = FONT_ANTIALIASING_GRAY) = 0;
 
 	virtual void font_set_data(const RID &p_font_rid, const PackedByteArray &p_data) = 0;
 	virtual void font_set_data_ptr(const RID &p_font_rid, const uint8_t *p_data_ptr, int64_t p_data_size) = 0;

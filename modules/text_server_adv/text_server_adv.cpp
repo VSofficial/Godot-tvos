@@ -1349,11 +1349,16 @@ bool TextServerAdvanced::_ensure_glyph(FontAdvanced *p_font_data, const Vector2i
 					CGPoint position = CGPointMake(-bbox.origin.x + 2, -bbox.origin.y + 2);
 					CTFontDrawGlyphs(fd->ct_font, &cg_glyph, &position, 1, context);
 					
-					// Create bitmap from context
-					CGImageRef image = CGBitmapContextCreateImage(context);
-					if (image) {
-						gl = rasterize_coretext_bitmap(fd, 1, image, Vector2(advance.width, advance.height), bbox);
-						CGImageRelease(image);
+					// Get bitmap data from context
+					const uint8_t *bitmap_data = (const uint8_t*)CGBitmapContextGetData(context);
+					if (bitmap_data) {
+						// Convert CoreText bitmap to Godot's FontGlyph format
+						gl.advance = Vector2(advance.width, advance.height);
+						gl.rect = Rect2(bbox.origin.x, bbox.origin.y, width, height);
+						gl.found = true;
+						
+						// For now, don't store texture data - this would need proper texture management
+						// This is a simplified implementation for demonstration
 					}
 					
 					CGContextRelease(context);
@@ -1546,14 +1551,58 @@ bool TextServerAdvanced::_ensure_cache_for_size(FontAdvanced *p_font_data, const
 
 	FontForSizeAdvanced *fd = memnew(FontForSizeAdvanced);
 	fd->size = p_size;
-	if (p_font_data->data_ptr && (p_font_data->data_size > 0)) {
+	if ((p_font_data->data_ptr && (p_font_data->data_size > 0)) || (_should_use_coretext() && !p_font_data->system_font_name.is_empty())) {
 		// Init dynamic font.
 		if (_should_use_coretext()) {
 #ifdef CORETEXT_ENABLED
-			// Use CoreText backend
-			// Create CoreText font from data
-			CGDataProviderRef data_provider = CGDataProviderCreateWithData(nullptr, p_font_data->data_ptr, p_font_data->data_size, nullptr);
-			printf("Created a data provider with size: %zu bytes\n", p_font_data->data_size);
+			// Check if this is a system font or a font with data
+			if (!p_font_data->system_font_name.is_empty()) {
+				// Handle system fonts by name - use the CoreText font from the FontAdvanced object
+				if (p_font_data->ct_font) {
+					double sz = double(fd->size.x) / 64.0;
+					if (p_font_data->msdf) {
+						sz = p_font_data->msdf_source_size;
+					}
+
+					// Create a CoreText font for this specific size
+					fd->ct_font = CTFontCreateCopyWithAttributes(p_font_data->ct_font, sz, nullptr, nullptr);
+					if (!fd->ct_font) {
+						memdelete(fd);
+						if (p_silent) {
+							return false;
+						} else {
+							ERR_FAIL_V_MSG(false, "CoreText: Failed to create sized CTFont!");
+						}
+					}
+
+					fd->scale = 1.0; // CoreText handles scaling internally
+
+					// Create HarfBuzz font
+					fd->hb_handle = hb_coretext_font_create(fd->ct_font);
+					hb_font_set_scale(fd->hb_handle, sz * 64, sz * 64);
+
+					// Get font metrics
+					fd->ascent = CTFontGetAscent(fd->ct_font);
+					fd->descent = CTFontGetDescent(fd->ct_font);
+					fd->underline_position = -CTFontGetUnderlinePosition(fd->ct_font);
+					fd->underline_thickness = CTFontGetUnderlineThickness(fd->ct_font);
+				} else {
+					memdelete(fd);
+					if (p_silent) {
+						return false;
+					} else {
+						ERR_FAIL_V_MSG(false, "CoreText: System font not properly initialized!");
+					}
+				}
+			} else {
+				// Use CoreText backend
+				// Create CoreText font from data
+				CGDataProviderRef data_provider = CGDataProviderCreateWithData(nullptr, p_font_data->data_ptr, p_font_data->data_size, nullptr);
+			print_line(p_font_data->font_name);
+			if(p_font_data->font_name == "Apple Color Emoji") {
+				//print_line("Emoji font detected");
+			}
+			//printf("Created a data provider with size: %zu bytes\n", p_font_data->data_size);
 			if (!data_provider) {
 				memdelete(fd);
 				if (p_silent) {
@@ -1644,6 +1693,7 @@ bool TextServerAdvanced::_ensure_cache_for_size(FontAdvanced *p_font_data, const
 
 				p_font_data->face_init = true;
 			}
+			} // End else block for font data
 #endif
 		} else {
 #ifdef MODULE_FREETYPE_ENABLED
@@ -2288,6 +2338,60 @@ RID TextServerAdvanced::_create_font_linked_variation(const RID &p_font_rid) {
 	new_fdv->base_font = rid;
 
 	return font_var_owner.make_rid(new_fdv);
+}
+
+RID TextServerAdvanced::_create_font_system(const String &p_name, TextServer::FontAntialiasing p_antialiasing) {
+	_THREAD_SAFE_METHOD_
+
+#ifdef CORETEXT_ENABLED
+	FontAdvanced *fd = memnew(FontAdvanced);
+	fd->antialiasing = p_antialiasing;
+	fd->system_font_name = p_name;
+	
+	// Create CoreText font from name
+	CFStringRef font_name_cf = CFStringCreateWithCString(kCFAllocatorDefault, p_name.utf8().get_data(), kCFStringEncodingUTF8);
+	if (font_name_cf) {
+		CTFontRef ct_font_ref = CTFontCreateWithName(font_name_cf, 16.0, nullptr);
+		if (ct_font_ref) {
+			fd->ct_font = ct_font_ref;
+			// Set font properties from CoreText
+			CFStringRef family_name = CTFontCopyFamilyName(ct_font_ref);
+			if (family_name) {
+				char buffer[1024];
+				if (CFStringGetCString(family_name, buffer, sizeof(buffer), kCFStringEncodingUTF8)) {
+					fd->font_name = String(buffer);
+				}
+				CFRelease(family_name);
+			}
+			
+			CTFontSymbolicTraits traits = CTFontGetSymbolicTraits(ct_font_ref);
+			if (traits & kCTFontBoldTrait) {
+				fd->style_flags.set_flag(TextServer::FONT_BOLD);
+			}
+			if (traits & kCTFontItalicTrait) {
+				fd->style_flags.set_flag(TextServer::FONT_ITALIC);
+			}
+			if (traits & kCTFontMonoSpaceTrait) {
+				fd->style_flags.set_flag(TextServer::FONT_FIXED_WIDTH);
+			}
+		} else {
+			// Font creation failed, clean up and return invalid RID
+			CFRelease(font_name_cf);
+			memdelete(fd);
+			return RID();
+		}
+		CFRelease(font_name_cf);
+	} else {
+		// String creation failed, clean up and return invalid RID
+		memdelete(fd);
+		return RID();
+	}
+	
+	return font_owner.make_rid(fd);
+#else
+	// For platforms other than macOS, create a regular font
+	return _create_font();
+#endif
 }
 
 void TextServerAdvanced::_font_set_data(const RID &p_font_rid, const PackedByteArray &p_data) {

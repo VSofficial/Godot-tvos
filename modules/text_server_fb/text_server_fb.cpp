@@ -1131,6 +1131,17 @@ RID TextServerFallback::_create_font_linked_variation(const RID &p_font_rid) {
 	return font_var_owner.make_rid(new_fdv);
 }
 
+RID TextServerFallback::_create_font_system(const String &p_name, TextServer::FontAntialiasing p_antialiasing) {
+	_THREAD_SAFE_METHOD_
+
+	// TextServerFallback doesn't support system fonts by name, so just create a regular font
+	// This could be extended in the future to support system font loading on platforms that have APIs for it
+	FontFallback *fd = memnew(FontFallback);
+	fd->antialiasing = p_antialiasing;
+	
+	return font_owner.make_rid(fd);
+}
+
 void TextServerFallback::_font_set_data(const RID &p_font_rid, const PackedByteArray &p_data) {
 	FontFallback *fd = _get_font_data(p_font_rid);
 	ERR_FAIL_NULL(fd);

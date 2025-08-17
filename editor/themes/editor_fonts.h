@@ -32,4 +32,16 @@
 
 #include "scene/resources/theme.h"
 
+class Font;
+class OperatingSystemFont;
+template <typename T>
+class Ref;
+template <typename T>
+class TypedArray;
+
+Ref<OperatingSystemFont> load_operating_system_font(const String &p_font_name, TextServer::Hinting p_hinting, TextServer::FontAntialiasing p_aa, bool p_autohint, TextServer::SubpixelPositioning p_font_subpixel_positioning, bool p_font_disable_embedded_bitmaps, TypedArray<Font> *r_fallbacks = nullptr);
+
+// Convenience function with common defaults for loading system fonts
+Ref<OperatingSystemFont> load_operating_system_font(const String &p_font_name);
+
 void editor_register_fonts(const Ref<Theme> &p_theme);

@@ -46,6 +46,8 @@ public:
 	virtual bool has(const RID &p_rid) override { return false; }
 
 	virtual RID create_font() override { return RID(); }
+	virtual RID create_font_linked_variation(const RID &p_font_rid) override { return RID(); }
+	virtual RID create_font_system(const String &p_name, FontAntialiasing p_antialiasing = FONT_ANTIALIASING_GRAY) override { return RID(); }
 	virtual void font_set_fixed_size(const RID &p_font_rid, int64_t p_fixed_size) override {}
 	virtual int64_t font_get_fixed_size(const RID &p_font_rid) const override { return 0; }
 	virtual void font_set_fixed_size_scale_mode(const RID &p_font_rid, TextServer::FixedSizeScaleMode p_fixed_size_scale_mode) override {}

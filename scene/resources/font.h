@@ -572,3 +572,107 @@ public:
 	SystemFont();
 	~SystemFont();
 };
+
+/*************************************************************************/
+/*  OperatingSystemFont                                                  */
+/*************************************************************************/
+
+class OperatingSystemFont : public Font {
+	GDCLASS(OperatingSystemFont, Font);
+
+	String font_name;
+	int font_size = 16;
+	bool italic = false;
+	int weight = 400;
+	int stretch = 100;
+
+	mutable Ref<Font> theme_font;
+	mutable RID os_font_rid;
+
+	TextServer::FontAntialiasing antialiasing = TextServer::FONT_ANTIALIASING_GRAY;
+	bool mipmaps = false;
+	bool disable_embedded_bitmaps = true;
+	bool force_autohinter = false;
+	bool modulate_color_glyphs = false;
+	bool allow_system_fallback = true;
+	TextServer::Hinting hinting = TextServer::HINTING_LIGHT;
+	TextServer::SubpixelPositioning subpixel_positioning = TextServer::SUBPIXEL_POSITIONING_AUTO;
+	bool keep_rounding_remainders = true;
+	double oversampling_override = 0.0;
+	bool msdf = false;
+	int msdf_pixel_range = 16;
+	int msdf_size = 48;
+
+protected:
+	static void _bind_methods();
+
+	virtual void _update_os_font() const;
+	virtual void _update_rids() const override;
+
+	virtual void reset_state() override;
+
+public:
+	virtual void set_antialiasing(TextServer::FontAntialiasing p_antialiasing);
+	virtual TextServer::FontAntialiasing get_antialiasing() const;
+
+	virtual void set_disable_embedded_bitmaps(bool p_disable_embedded_bitmaps);
+	virtual bool get_disable_embedded_bitmaps() const;
+
+	virtual void set_generate_mipmaps(bool p_generate_mipmaps);
+	virtual bool get_generate_mipmaps() const;
+
+	virtual void set_allow_system_fallback(bool p_allow_system_fallback);
+	virtual bool is_allow_system_fallback() const;
+
+	virtual void set_force_autohinter(bool p_force_autohinter);
+	virtual bool is_force_autohinter() const;
+
+	virtual void set_modulate_color_glyphs(bool p_modulate);
+	virtual bool is_modulate_color_glyphs() const;
+
+	virtual void set_hinting(TextServer::Hinting p_hinting);
+	virtual TextServer::Hinting get_hinting() const;
+
+	virtual void set_subpixel_positioning(TextServer::SubpixelPositioning p_subpixel);
+	virtual TextServer::SubpixelPositioning get_subpixel_positioning() const;
+
+	virtual void set_keep_rounding_remainders(bool p_keep_rounding_remainders);
+	virtual bool get_keep_rounding_remainders() const;
+
+	virtual void set_oversampling(real_t p_oversampling);
+	virtual real_t get_oversampling() const;
+
+	virtual void set_multichannel_signed_distance_field(bool p_msdf);
+	virtual bool is_multichannel_signed_distance_field() const;
+
+	virtual void set_msdf_pixel_range(int p_msdf_pixel_range);
+	virtual int get_msdf_pixel_range() const;
+
+	virtual void set_msdf_size(int p_msdf_size);
+	virtual int get_msdf_size() const;
+
+	virtual void set_font_name(const String &p_name);
+	virtual String get_font_name() const override;
+
+	virtual void set_font_size(int p_size);
+	virtual int get_font_size() const;
+
+	virtual void set_font_italic(bool p_italic);
+	virtual bool get_font_italic() const;
+
+	virtual void set_font_weight(int p_weight);
+	virtual int get_font_weight() const override;
+
+	virtual void set_font_stretch(int p_stretch);
+	virtual int get_font_stretch() const override;
+
+	virtual int get_spacing(TextServer::SpacingType p_spacing) const override;
+
+	virtual RID find_variation(const Dictionary &p_variation_coordinates, int p_face_index = 0, float p_strength = 0.0, Transform2D p_transform = Transform2D(), int p_spacing_top = 0, int p_spacing_bottom = 0, int p_spacing_space = 0, int p_spacing_glyph = 0, float p_baseline_offset = 0.0) const override;
+	virtual RID _get_rid() const override;
+
+	int64_t get_face_count() const override;
+
+	OperatingSystemFont();
+	~OperatingSystemFont();
+};

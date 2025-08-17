@@ -97,6 +97,41 @@ Ref<FontFile> load_internal_font(const uint8_t *p_data, size_t p_size, TextServe
 	return font;
 }
 
+// Load a system font by name using OperatingSystemFont.
+// This uses the operating system's font APIs (e.g., CoreText on macOS) to load fonts
+// installed on the system, rather than loading font files from disk.
+// Example usage:
+//   auto helvetica = load_operating_system_font("Helvetica");
+//   auto arial_bold = load_operating_system_font("Arial Bold");
+Ref<OperatingSystemFont> load_operating_system_font(const String &p_font_name, TextServer::Hinting p_hinting, TextServer::FontAntialiasing p_aa, bool p_autohint, TextServer::SubpixelPositioning p_font_subpixel_positioning, bool p_font_disable_embedded_bitmaps, TypedArray<Font> *r_fallbacks) {
+	Ref<OperatingSystemFont> font;
+	font.instantiate();
+
+	font->set_font_name(p_font_name);
+	font->set_antialiasing(p_aa);
+	font->set_hinting(p_hinting);
+	font->set_force_autohinter(p_autohint);
+	font->set_subpixel_positioning(p_font_subpixel_positioning);
+	font->set_disable_embedded_bitmaps(p_font_disable_embedded_bitmaps);
+
+	if (r_fallbacks != nullptr) {
+		r_fallbacks->push_back(font);
+	}
+	return font;
+}
+
+Ref<OperatingSystemFont> load_operating_system_font(const String &p_font_name) {
+	return load_operating_system_font(
+		p_font_name,
+		TextServer::HINTING_LIGHT,
+		TextServer::FONT_ANTIALIASING_GRAY,
+		true, // autohint
+		TextServer::SUBPIXEL_POSITIONING_AUTO,
+		true, // disable embedded bitmaps
+		nullptr // no fallbacks
+	);
+}
+
 Ref<FontVariation> make_bold_font(const Ref<Font> &p_font, double p_embolden, TypedArray<Font> *r_fallbacks = nullptr) {
 	Ref<FontVariation> font_var;
 	font_var.instantiate();
@@ -153,7 +188,8 @@ void editor_register_fonts(const Ref<Theme> &p_theme) {
 	const int default_font_size = int(EDITOR_GET("interface/editor/main_font_size")) * EDSCALE;
 	const float embolden_strength = 0.6;
 
-	Ref<Font> default_font = load_internal_font(_font_NotoSans_Regular, _font_NotoSans_Regular_size, font_hinting, font_antialiasing, true, font_subpixel_positioning, font_disable_embedded_bitmaps, false);
+	//Ref<Font> default_font = load_internal_font(_font_NotoSans_Regular, _font_NotoSans_Regular_size, font_hinting, font_antialiasing, true, font_subpixel_positioning, font_disable_embedded_bitmaps, false);
+	Ref<Font> default_font = load_operating_system_font("SF Pro", font_hinting, font_antialiasing, true, font_subpixel_positioning, font_disable_embedded_bitmaps, nullptr);
 	Ref<Font> default_font_msdf = load_internal_font(_font_NotoSans_Regular, _font_NotoSans_Regular_size, font_hinting, font_antialiasing, true, font_subpixel_positioning, font_disable_embedded_bitmaps, font_allow_msdf);
 
 	String noto_cjk_path;
@@ -169,6 +205,7 @@ void editor_register_fonts(const Ref<Theme> &p_theme) {
 	}
 
 	TypedArray<Font> fallbacks;
+	#if false
 	Ref<FontFile> arabic_font = load_internal_font(_font_Vazirmatn_Regular, _font_Vazirmatn_Regular_size, font_hinting, font_antialiasing, true, font_subpixel_positioning, font_disable_embedded_bitmaps, false, &fallbacks);
 	Ref<FontFile> bengali_font = load_internal_font(_font_NotoSansBengaliUI_Regular, _font_NotoSansBengaliUI_Regular_size, font_hinting, font_antialiasing, true, font_subpixel_positioning, font_disable_embedded_bitmaps, false, &fallbacks);
 	Ref<FontFile> devanagari_font = load_internal_font(_font_NotoSansDevanagariUI_Regular, _font_NotoSansDevanagariUI_Regular_size, font_hinting, font_antialiasing, true, font_subpixel_positioning, font_disable_embedded_bitmaps, false, &fallbacks);
@@ -187,11 +224,13 @@ void editor_register_fonts(const Ref<Theme> &p_theme) {
 	Ref<FontFile> japanese_font = load_internal_font(_font_DroidSansJapanese, _font_DroidSansJapanese_size, font_hinting, font_antialiasing, true, font_subpixel_positioning, font_disable_embedded_bitmaps, false, &fallbacks);
 	default_font->set_fallbacks(fallbacks);
 	default_font_msdf->set_fallbacks(fallbacks);
-
-	Ref<FontFile> default_font_bold = load_internal_font(_font_NotoSans_Bold, _font_NotoSans_Bold_size, font_hinting, font_antialiasing, true, font_subpixel_positioning, font_disable_embedded_bitmaps, false);
-	Ref<FontFile> default_font_bold_msdf = load_internal_font(_font_NotoSans_Bold, _font_NotoSans_Bold_size, font_hinting, font_antialiasing, true, font_subpixel_positioning, font_disable_embedded_bitmaps, font_allow_msdf);
+#endif
+	//Ref<FontFile> default_font_bold = load_internal_font(_font_NotoSans_Bold, _font_NotoSans_Bold_size, font_hinting, font_antialiasing, true, font_subpixel_positioning, font_disable_embedded_bitmaps, false);
+	Ref<Font> default_font_bold = load_operating_system_font("Palatino Bold", font_hinting, font_antialiasing, true, font_subpixel_positioning, font_disable_embedded_bitmaps, nullptr);
+	Ref<Font> default_font_bold_msdf = load_internal_font(_font_NotoSans_Bold, _font_NotoSans_Bold_size, font_hinting, font_antialiasing, true, font_subpixel_positioning, font_disable_embedded_bitmaps, font_allow_msdf);
 
 	TypedArray<Font> fallbacks_bold;
+	#if false
 	Ref<FontFile> arabic_font_bold = load_internal_font(_font_Vazirmatn_Bold, _font_Vazirmatn_Bold_size, font_hinting, font_antialiasing, true, font_subpixel_positioning, font_disable_embedded_bitmaps, false, &fallbacks_bold);
 	Ref<FontFile> bengali_font_bold = load_internal_font(_font_NotoSansBengaliUI_Bold, _font_NotoSansBengaliUI_Bold_size, font_hinting, font_antialiasing, true, font_subpixel_positioning, font_disable_embedded_bitmaps, false, &fallbacks_bold);
 	Ref<FontFile> devanagari_font_bold = load_internal_font(_font_NotoSansDevanagariUI_Bold, _font_NotoSansDevanagariUI_Bold_size, font_hinting, font_antialiasing, true, font_subpixel_positioning, font_disable_embedded_bitmaps, false, &fallbacks_bold);
@@ -209,6 +248,7 @@ void editor_register_fonts(const Ref<Theme> &p_theme) {
 	Ref<FontVariation> fallback_font_bold = make_bold_font(fallback_font, embolden_strength, &fallbacks_bold);
 	Ref<FontVariation> japanese_font_bold = make_bold_font(japanese_font, embolden_strength, &fallbacks_bold);
 
+	#if true
 	if (OS::get_singleton()->has_feature("system_fonts")) {
 		PackedStringArray emoji_font_names = {
 			"Apple Color Emoji",
@@ -222,11 +262,21 @@ void editor_register_fonts(const Ref<Theme> &p_theme) {
 		fallbacks.push_back(emoji_font);
 		fallbacks_bold.push_back(emoji_font);
 	}
+	#else
+	Ref<SystemFont> emoji_font = load_operating_system_font("Apple Color Emoji", font_hinting, font_antialiasing, true, font_subpixel_positioning, font_disable_embedded_bitmaps, nullptr);
+		fallbacks.push_back(emoji_font);
+		fallbacks_bold.push_back(emoji_font);
+	#endif
 
 	default_font_bold->set_fallbacks(fallbacks_bold);
 	default_font_bold_msdf->set_fallbacks(fallbacks_bold);
-
-	Ref<FontFile> default_font_mono = load_internal_font(_font_JetBrainsMono_Regular, _font_JetBrainsMono_Regular_size, font_mono_hinting, font_antialiasing, true, font_subpixel_positioning, font_disable_embedded_bitmaps);
+#endif
+	//Ref<FontFile> default_font_mono = load_internal_font(_font_JetBrainsMono_Regular, _font_JetBrainsMono_Regular_size, font_mono_hinting, font_antialiasing, true, font_subpixel_positioning, font_disable_embedded_bitmaps);
+	Ref<Font> default_font_mono = load_operating_system_font("SF Mono", font_mono_hinting, font_antialiasing, true, font_subpixel_positioning, font_disable_embedded_bitmaps, nullptr);
+	if (!default_font_mono.is_valid()) {
+		// Fallback to another font if "SF Mono" is not available.
+		default_font_mono = load_operating_system_font("Courier New", font_mono_hinting, font_antialiasing, true, font_subpixel_positioning, font_disable_embedded_bitmaps, nullptr);
+	}
 	default_font_mono->set_fallbacks(fallbacks);
 
 	// Init base font configs and load custom fonts.

@@ -386,6 +386,7 @@ class TextServerAdvanced : public TextServerExtension {
 		BitField<TextServer::FontStyle> style_flags = 0;
 		String font_name;
 		String style_name;
+		String system_font_name;
 		int weight = 400;
 		int stretch = 100;
 		int extra_spacing[4] = { 0, 0, 0, 0 };
@@ -408,11 +409,21 @@ class TextServerAdvanced : public TextServerExtension {
 		size_t data_size;
 		int face_index = 0;
 
+#ifdef CORETEXT_ENABLED
+		CTFontRef ct_font = nullptr;
+#endif
+
 		~FontAdvanced() {
 			for (const KeyValue<Vector2i, FontForSizeAdvanced *> &E : cache) {
 				memdelete(E.value);
 			}
 			cache.clear();
+#ifdef CORETEXT_ENABLED
+			if (ct_font) {
+				CFRelease(ct_font);
+				ct_font = nullptr;
+			}
+#endif
 		}
 	};
 
@@ -808,6 +819,7 @@ public:
 
 	MODBIND0R(RID, create_font);
 	MODBIND1R(RID, create_font_linked_variation, const RID &);
+	MODBIND2R(RID, create_font_system, const String &, TextServer::FontAntialiasing);
 
 	MODBIND2(font_set_data, const RID &, const PackedByteArray &);
 	MODBIND3(font_set_data_ptr, const RID &, const uint8_t *, int64_t);

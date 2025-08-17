@@ -626,6 +626,7 @@ public:
 
 	MODBIND0R(RID, create_font);
 	MODBIND1R(RID, create_font_linked_variation, const RID &);
+	MODBIND2R(RID, create_font_system, const String &, TextServer::FontAntialiasing);
 
 	MODBIND2(font_set_data, const RID &, const PackedByteArray &);
 	MODBIND3(font_set_data_ptr, const RID &, const uint8_t *, int64_t);

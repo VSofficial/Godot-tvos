@@ -53,6 +53,7 @@ void TextServerExtension::_bind_methods() {
 
 	GDVIRTUAL_BIND(_create_font);
 	GDVIRTUAL_BIND(_create_font_linked_variation, "font_rid");
+	GDVIRTUAL_BIND(_create_font_system, "name", "antialiasing");
 
 	GDVIRTUAL_BIND(_font_set_data, "font_rid", "data");
 	GDVIRTUAL_BIND(_font_set_data_ptr, "font_rid", "data_ptr", "data_size");
@@ -479,6 +480,12 @@ RID TextServerExtension::create_font() {
 RID TextServerExtension::create_font_linked_variation(const RID &p_font_rid) {
 	RID ret;
 	GDVIRTUAL_CALL(_create_font_linked_variation, p_font_rid, ret);
+	return ret;
+}
+
+RID TextServerExtension::create_font_system(const String &p_name, FontAntialiasing p_antialiasing) {
+	RID ret;
+	GDVIRTUAL_CALL(_create_font_system, p_name, p_antialiasing, ret);
 	return ret;
 }
 

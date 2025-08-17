@@ -1498,7 +1498,7 @@ ProjectManager::ProjectManager() {
 			filter_option->connect(SceneStringName(item_selected), callable_mp(this, &ProjectManager::_on_order_option_changed));
 			hb->add_child(filter_option);
 
-			filter_option->add_item(TTRC("Last Edited"));
+			filter_option->add_item(TTRC("😀Last Edited"));
 			filter_option->add_item(TTRC("Name"));
 			filter_option->add_item(TTRC("Path"));
 			filter_option->add_item(TTRC("Tags"));

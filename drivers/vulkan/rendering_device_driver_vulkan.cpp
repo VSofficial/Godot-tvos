@@ -647,7 +647,7 @@ Error RenderingDeviceDriverVulkan::_check_device_features() {
 		}
 		error_string += "\nThis is usually a hardware limitation, so updating graphics drivers won't help in most cases.";
 
-#if defined(ANDROID_ENABLED) || defined(IOS_ENABLED)
+#if defined(ANDROID_ENABLED) || defined(IOS_ENABLED) || defined(TVOS_ENABLED)
 		// Android/iOS platform ports currently don't exit themselves when this method returns `ERR_CANT_CREATE`.
 		OS::get_singleton()->alert(error_string + "\nClick OK to exit (black screen will be visible).");
 #else

@@ -741,7 +741,7 @@ Rect2 OS_AppleEmbedded::calculate_boot_screen_rect(const Size2 &p_window_size, c
 
 bool OS_AppleEmbedded::request_permission(const String &p_name) {
 	if (p_name == "appleembedded.permission.AUDIO_RECORD") {
-		if (@available(iOS 17.0, *)) {
+		if (@available(iOS 17.0, tvOS 17.0, *)) {
 			AVAudioApplicationRecordPermission permission = [AVAudioApplication sharedInstance].recordPermission;
 			if (permission == AVAudioApplicationRecordPermissionGranted) {
 				// Permission already granted, you can start recording.
@@ -763,7 +763,7 @@ bool OS_AppleEmbedded::request_permission(const String &p_name) {
 Vector<String> OS_AppleEmbedded::get_granted_permissions() const {
 	Vector<String> ret;
 
-	if (@available(iOS 17.0, *)) {
+	if (@available(iOS 17.0, tvOS 17.0, *)) {
 		if ([AVAudioApplication sharedInstance].recordPermission == AVAudioApplicationRecordPermissionGranted) {
 			ret.push_back("appleembedded.permission.AUDIO_RECORD");
 		}

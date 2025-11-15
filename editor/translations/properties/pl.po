@@ -5296,6 +5296,9 @@ msgstr "Lokalizowany opis użycia usuwalnych wolumenów"
 msgid "Min visionOS Version"
 msgstr "Min. wersja visionOS"
 
+msgid "Min tvOS Version"
+msgstr "Min. wersja tvOS"
+
 msgid "Web"
 msgstr "Przeglądarka (HTML5)"
 

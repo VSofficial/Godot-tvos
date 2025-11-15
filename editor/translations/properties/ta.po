@@ -5199,6 +5199,9 @@ msgstr "நீக்கக்கூடிய தொகுதிகள் பய�
 msgid "Min visionOS Version"
 msgstr "மின் விசோச் பதிப்பு"
 
+msgid "Min tvOS Version"
+msgstr "மின் tvOS பதிப்பு"
+
 msgid "Web"
 msgstr "விரலிடைத் தோல்"
 

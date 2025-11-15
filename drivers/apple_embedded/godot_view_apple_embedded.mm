@@ -126,7 +126,7 @@ static const float earth_gravity = 9.80665;
 	self.contentScaleFactor = [UIScreen mainScreen].scale;
 #endif
 
-	if (@available(iOS 17.0, *)) {
+	if (@available(iOS 17.0, tvOS 17.0, *)) {
 		[self registerForTraitChanges:@[ [UITraitUserInterfaceStyle class] ] withTarget:self action:@selector(traitCollectionDidChangeWithView:previousTraitCollection:)];
 	}
 
@@ -154,7 +154,7 @@ static const float earth_gravity = 9.80665;
 }
 
 - (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
-	if (@available(iOS 13.0, *)) {
+	if (@available(iOS 13.0, tvOS 13.0, *)) {
 #if !defined(VISIONOS_ENABLED)
 		[super traitCollectionDidChange:previousTraitCollection];
 #endif
@@ -164,7 +164,7 @@ static const float earth_gravity = 9.80665;
 }
 
 - (void)traitCollectionDidChangeWithView:(UIView *)view previousTraitCollection:(UITraitCollection *)previousTraitCollection {
-	if (@available(iOS 13.0, *)) {
+	if (@available(iOS 13.0, tvOS 13.0, *)) {
 		if ([UITraitCollection currentTraitCollection].userInterfaceStyle != previousTraitCollection.userInterfaceStyle) {
 			[self system_theme_changed];
 		}

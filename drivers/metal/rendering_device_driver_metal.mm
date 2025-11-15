@@ -191,7 +191,7 @@ void RenderingDeviceDriverMetal::buffer_flush(BufferID p_buffer) {
 }
 
 uint64_t RenderingDeviceDriverMetal::buffer_get_device_address(BufferID p_buffer) {
-	if (@available(iOS 16.0, macOS 13.0, *)) {
+	if (@available(iOS 16.0, macOS 13.0, tvOS 16.0, *)) {
 		const BufferInfo *buf_info = (const BufferInfo *)p_buffer.id;
 		return buf_info->metal_buffer.gpuAddress;
 	} else {

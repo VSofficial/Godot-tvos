@@ -5291,6 +5291,9 @@ msgstr "可移除卷使用描述本地化"
 msgid "Min visionOS Version"
 msgstr "最低 visionOS 版本"
 
+msgid "Min tvOS Version"
+msgstr "最低 tvOS 版本"
+
 msgid "Web"
 msgstr "Web"
 

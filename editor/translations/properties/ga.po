@@ -5198,6 +5198,9 @@ msgstr "Inbhainte Imleabhair Cur síos Úsáid Logánaithe"
 msgid "Min visionOS Version"
 msgstr "Leagan OS Min vision"
 
+msgid "Min tvOS Version"
+msgstr "Leagan OS Min tv"
+
 msgid "Web"
 msgstr "Gréasán"
 

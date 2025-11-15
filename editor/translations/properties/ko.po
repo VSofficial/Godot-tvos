@@ -5252,6 +5252,9 @@ msgstr "이동식 볼륨 사용법 설명 현지화됨"
 msgid "Min visionOS Version"
 msgstr "최소 visionOS 버전"
 
+msgid "Min tvOS Version"
+msgstr "최소 tvOS 버전"
+
 msgid "Web"
 msgstr "웹"
 

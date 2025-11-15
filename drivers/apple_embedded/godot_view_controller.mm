@@ -41,6 +41,7 @@
 
 #import <AVFoundation/AVFoundation.h>
 #import <GameController/GameController.h>
+#import <TargetConditionals.h>
 
 @interface GDTViewController () <GDTViewDelegate>
 
@@ -63,7 +64,7 @@
 	if (!DisplayServerAppleEmbedded::get_singleton() || DisplayServerAppleEmbedded::get_singleton()->is_keyboard_active()) {
 		return;
 	}
-	if (@available(iOS 13.4, *)) {
+	if (@available(iOS 13.4, tvOS 13.4, *)) {
 		for (UIPress *press in presses) {
 			String u32lbl = String::utf8([press.key.charactersIgnoringModifiers UTF8String]);
 			String u32text = String::utf8([press.key.characters UTF8String]);
@@ -98,7 +99,7 @@
 	if (!DisplayServerAppleEmbedded::get_singleton() || DisplayServerAppleEmbedded::get_singleton()->is_keyboard_active()) {
 		return;
 	}
-	if (@available(iOS 13.4, *)) {
+	if (@available(iOS 13.4, tvOS 13.4, *)) {
 		for (UIPress *press in presses) {
 			String u32lbl = String::utf8([press.key.charactersIgnoringModifiers UTF8String]);
 			Key key = KeyMappingAppleEmbedded::remap_key(press.key.keyCode);
@@ -162,10 +163,14 @@
 - (void)viewDidLoad {
 	[super viewDidLoad];
 
+#if !TARGET_OS_TV
 	[self observeKeyboard];
+#endif
 	[self displayLoadingOverlay];
 
+#if !TARGET_OS_TV
 	[self setNeedsUpdateOfScreenEdgesDeferringSystemGestures];
+#endif
 }
 
 - (void)viewDidAppear:(BOOL)animated {
@@ -178,6 +183,7 @@
 	[super viewDidDisappear:animated];
 }
 
+#if !TARGET_OS_TV
 - (void)observeKeyboard {
 	print_verbose("Setting up keyboard input view.");
 	self.keyboardView = [GDTKeyboardInputView new];
@@ -195,6 +201,7 @@
 				   name:UIKeyboardDidHideNotification
 				 object:nil];
 }
+#endif
 
 - (void)displayLoadingOverlay {
 #if !defined(VISIONOS_ENABLED)

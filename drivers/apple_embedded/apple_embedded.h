@@ -32,7 +32,9 @@
 
 #include "core/object/class_db.h"
 
+#if !defined(TVOS_ENABLED)
 #import <CoreHaptics/CoreHaptics.h>
+#endif
 
 class AppleEmbedded : public Object {
 	GDCLASS(AppleEmbedded, Object);
@@ -40,11 +42,13 @@ class AppleEmbedded : public Object {
 	static void _bind_methods();
 
 private:
+#if !defined(TVOS_ENABLED)
 	CHHapticEngine *haptic_engine API_AVAILABLE(ios(13)) = nullptr;
 
 	CHHapticEngine *get_haptic_engine_instance() API_AVAILABLE(ios(13));
 	void start_haptic_engine();
 	void stop_haptic_engine();
+#endif
 
 public:
 	static void alert(const char *p_alert, const char *p_title);

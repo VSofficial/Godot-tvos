@@ -1,0 +1,29 @@
+#!/usr/bin/env python
+from misc.utility.scons_hints import *
+
+from platform_tvos_builders import generate_bundle
+
+from platform_methods import combine_libs_apple_embedded
+
+Import("env")
+
+platform_sources = [
+    "display_layer_tvos.mm",
+    "display_server_tvos.mm",
+    "godot_view_tvos.mm",
+    "main_tvos.mm",
+    "os_tvos.mm",
+]
+
+env_tvos = env.Clone()
+tvos_lib = env_tvos.add_library("tvos", platform_sources)
+
+# Enable module support when building tvOS glue.
+env_tvos.Append(CCFLAGS=["-fmodules", "-fcxx-modules"])
+
+combine_command = env_tvos.CommandNoCache(
+    "#bin/libgodot" + env_tvos["LIBSUFFIX"], [tvos_lib] + env_tvos["LIBS"], env.Run(combine_libs_apple_embedded)
+)
+
+if env["generate_bundle"]:
+    env.AlwaysBuild(env.CommandNoCache("generate_bundle", combine_command, env.Run(generate_bundle)))

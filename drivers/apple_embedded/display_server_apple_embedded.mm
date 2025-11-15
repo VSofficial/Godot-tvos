@@ -94,12 +94,12 @@ DisplayServerAppleEmbedded::DisplayServerAppleEmbedded(const String &p_rendering
 #endif
 #ifdef METAL_ENABLED
 	if (rendering_driver == "metal") {
-		if (@available(iOS 14.0, *)) {
+		if (@available(iOS 14.0, tvOS 14.0, *)) {
 			layer = [GDTAppDelegateService.viewController.godotView initializeRenderingForDriver:@"metal"];
 			wpd.metal.layer = (CAMetalLayer *)layer;
 			rendering_context = memnew(RenderingContextDriverMetal);
 		} else {
-			OS::get_singleton()->alert("Metal is only supported on iOS 14.0 and later.");
+			OS::get_singleton()->alert("Metal is only supported on iOS/tvOS 14.0 and later.");
 			r_error = ERR_UNAVAILABLE;
 			return;
 		}
@@ -311,7 +311,7 @@ void DisplayServerAppleEmbedded::key(Key p_key, char32_t p_char, Key p_unshifted
 	ev->set_echo(false);
 	ev->set_pressed(p_pressed);
 	ev->set_keycode(fix_keycode(p_char, p_key));
-	if (@available(iOS 13.4, *)) {
+	if (@available(iOS 13.4, tvOS 13.4, *)) {
 		if (p_key != Key::SHIFT) {
 			ev->set_shift_pressed(p_modifier & UIKeyModifierShift);
 		}
@@ -446,7 +446,7 @@ void DisplayServerAppleEmbedded::tts_stop() {
 }
 
 bool DisplayServerAppleEmbedded::is_dark_mode_supported() const {
-	if (@available(iOS 13.0, *)) {
+	if (@available(iOS 13.0, tvOS 13.0, *)) {
 		return true;
 	} else {
 		return false;
@@ -454,7 +454,7 @@ bool DisplayServerAppleEmbedded::is_dark_mode_supported() const {
 }
 
 bool DisplayServerAppleEmbedded::is_dark_mode() const {
-	if (@available(iOS 13.0, *)) {
+	if (@available(iOS 13.0, tvOS 13.0, *)) {
 		return [UITraitCollection currentTraitCollection].userInterfaceStyle == UIUserInterfaceStyleDark;
 	} else {
 		return false;
@@ -662,7 +662,7 @@ void DisplayServerAppleEmbedded::screen_set_orientation(DisplayServer::ScreenOri
 	ERR_FAIL_INDEX(p_screen, screen_count);
 
 	screen_orientation = p_orientation;
-	if (@available(iOS 16.0, *)) {
+	if (@available(iOS 16.0, tvOS 16.0, *)) {
 		[GDTAppDelegateService.viewController setNeedsUpdateOfSupportedInterfaceOrientations];
 	}
 #if !defined(VISIONOS_ENABLED)
@@ -761,7 +761,7 @@ int DisplayServerAppleEmbedded::virtual_keyboard_get_height() const {
 }
 
 bool DisplayServerAppleEmbedded::has_hardware_keyboard() const {
-	if (@available(iOS 14.0, *)) {
+	if (@available(iOS 14.0, tvOS 14.0, *)) {
 		return [GCKeyboard coalescedKeyboard];
 	} else {
 		return false;

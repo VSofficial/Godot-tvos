@@ -5404,6 +5404,9 @@ msgstr "Локализованное описание использования
 msgid "Min visionOS Version"
 msgstr "Минимальная версия visionOS"
 
+msgid "Min tvOS Version"
+msgstr "Минимальная версия tvOS"
+
 msgid "Web"
 msgstr "Web"
 

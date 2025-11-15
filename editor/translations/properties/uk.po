@@ -5235,6 +5235,9 @@ msgstr "ФОпис використання знімних томів локал
 msgid "Min visionOS Version"
 msgstr "Мінімальна версія visionOS"
 
+msgid "Min tvOS Version"
+msgstr "Мінімальна версія tvOS"
+
 msgid "Web"
 msgstr "Інтернет"
 

@@ -33,7 +33,6 @@
 #import "app_delegate_service.h"
 #import "godot_view_controller.h"
 
-#import <CoreHaptics/CoreHaptics.h>
 #import <UIKit/UIKit.h>
 #include <sys/sysctl.h>
 
@@ -43,6 +42,8 @@ void AppleEmbedded::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("start_haptic_engine"), &AppleEmbedded::start_haptic_engine);
 	ClassDB::bind_method(D_METHOD("stop_haptic_engine"), &AppleEmbedded::stop_haptic_engine);
 }
+
+#if !defined(TVOS_ENABLED)
 
 bool AppleEmbedded::supports_haptic_engine() {
 	if (@available(iOS 13, *)) {
@@ -157,6 +158,22 @@ void AppleEmbedded::stop_haptic_engine() {
 
 	NSLog(@"Haptic engine is not supported");
 }
+#else
+
+bool AppleEmbedded::supports_haptic_engine() {
+	return false;
+}
+
+void AppleEmbedded::vibrate_haptic_engine(float p_duration_seconds, float p_amplitude) {
+	(void)p_duration_seconds;
+	(void)p_amplitude;
+}
+
+void AppleEmbedded::start_haptic_engine() {}
+
+void AppleEmbedded::stop_haptic_engine() {}
+
+#endif // !TVOS_ENABLED
 
 void AppleEmbedded::alert(const char *p_alert, const char *p_title) {
 	NSString *title = [NSString stringWithUTF8String:p_title];

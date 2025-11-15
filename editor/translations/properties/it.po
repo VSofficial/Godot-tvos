@@ -5224,6 +5224,9 @@ msgstr "Descrizione (localizzata) dell'accesso ai dischi rimovibili"
 msgid "Min visionOS Version"
 msgstr "Versione minima di visionOS"
 
+msgid "Min tvOS Version"
+msgstr "Versione minima di tvOS"
+
 msgid "Web"
 msgstr "Web"
 

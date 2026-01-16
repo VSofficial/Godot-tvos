@@ -30,6 +30,10 @@
 
 #include "text_server_adv.h"
 
+#if defined(MACOS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+#include <hb-coretext.h>
+#endif
+
 #ifdef GDEXTENSION
 // Headers for building as GDExtension plug-in.
 
@@ -92,6 +96,26 @@ GODOT_MSVC_WARNING_POP
 /*************************************************************************/
 
 hb_font_funcs_t *TextServerAdvanced::funcs = nullptr;
+
+#if defined(MACOS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+static int _coretext_codepoint_to_utf16(uint32_t p_codepoint, UniChar r_chars[2]) {
+	if (p_codepoint <= 0xFFFF) {
+		r_chars[0] = (UniChar)p_codepoint;
+		return 1;
+	}
+	uint32_t c = p_codepoint - 0x10000;
+	r_chars[0] = (UniChar)(0xD800 + (c >> 10));
+	r_chars[1] = (UniChar)(0xDC00 + (c & 0x3FF));
+	return 2;
+}
+
+static bool _coretext_has_color_glyphs(CTFontRef p_font) {
+	if (p_font == nullptr) {
+		return false;
+	}
+	return (CTFontGetSymbolicTraits(p_font) & kCTFontTraitColorGlyphs) != 0;
+}
+#endif
 
 TextServerAdvanced::bmp_font_t *TextServerAdvanced::_bmp_font_create(TextServerAdvanced::FontForSizeAdvanced *p_face, bool p_unref) {
 	bmp_font_t *bm_font = memnew(bmp_font_t);
@@ -366,8 +390,10 @@ bool TextServerAdvanced::_has_feature(Feature p_feature) const {
 #endif
 #ifdef MODULE_MSDFGEN_ENABLED
 		case FEATURE_FONT_MSDF:
+			return !coretext_enabled;
 #endif
 		case FEATURE_FONT_VARIABLE:
+			return !coretext_enabled;
 		case FEATURE_CONTEXT_SENSITIVE_CASE_CONVERSION:
 		case FEATURE_USE_SUPPORT_DATA:
 		case FEATURE_UNICODE_IDENTIFIERS:
@@ -380,6 +406,11 @@ bool TextServerAdvanced::_has_feature(Feature p_feature) const {
 }
 
 String TextServerAdvanced::_get_name() const {
+#if defined(MACOS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+	if (coretext_enabled) {
+		return "CoreText";
+	}
+#endif
 #ifdef GDEXTENSION
 	return "ICU / HarfBuzz / Graphite (GDExtension)";
 #elif defined(GODOT_MODULE)
@@ -388,12 +419,17 @@ String TextServerAdvanced::_get_name() const {
 }
 
 int64_t TextServerAdvanced::_get_features() const {
-	int64_t interface_features = FEATURE_SIMPLE_LAYOUT | FEATURE_BIDI_LAYOUT | FEATURE_VERTICAL_LAYOUT | FEATURE_SHAPING | FEATURE_KASHIDA_JUSTIFICATION | FEATURE_BREAK_ITERATORS | FEATURE_FONT_BITMAP | FEATURE_FONT_VARIABLE | FEATURE_CONTEXT_SENSITIVE_CASE_CONVERSION | FEATURE_USE_SUPPORT_DATA;
+	int64_t interface_features = FEATURE_SIMPLE_LAYOUT | FEATURE_BIDI_LAYOUT | FEATURE_VERTICAL_LAYOUT | FEATURE_SHAPING | FEATURE_KASHIDA_JUSTIFICATION | FEATURE_BREAK_ITERATORS | FEATURE_FONT_BITMAP | FEATURE_CONTEXT_SENSITIVE_CASE_CONVERSION | FEATURE_USE_SUPPORT_DATA;
 #ifdef MODULE_FREETYPE_ENABLED
 	interface_features |= FEATURE_FONT_DYNAMIC;
 #endif
+	if (!coretext_enabled) {
+		interface_features |= FEATURE_FONT_VARIABLE;
+	}
 #ifdef MODULE_MSDFGEN_ENABLED
-	interface_features |= FEATURE_FONT_MSDF;
+	if (!coretext_enabled) {
+		interface_features |= FEATURE_FONT_MSDF;
+	}
 #endif
 
 	return interface_features;
@@ -1227,6 +1263,64 @@ _FORCE_INLINE_ TextServerAdvanced::FontGlyph TextServerAdvanced::rasterize_bitma
 }
 #endif
 
+#if defined(MACOS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+_FORCE_INLINE_ TextServerAdvanced::FontGlyph TextServerAdvanced::rasterize_coretext(FontForSizeAdvanced *p_data, int p_rect_margin, const uint8_t *p_buffer, int p_width, int p_height, int p_xofs, int p_yofs, const Vector2 &p_advance, bool p_rgba) const {
+	FontGlyph chr;
+	chr.advance = p_advance * p_data->scale;
+	chr.found = true;
+
+	int w = p_width;
+	int h = p_height;
+	if (w <= 0 || h <= 0) {
+		chr.texture_idx = -1;
+		chr.uv_rect = Rect2();
+		chr.rect = Rect2();
+		return chr;
+	}
+
+	int color_size = p_rgba ? 4 : 2;
+	int mw = w + p_rect_margin * 4;
+	int mh = h + p_rect_margin * 4;
+
+	ERR_FAIL_COND_V(mw > 4096, FontGlyph());
+	ERR_FAIL_COND_V(mh > 4096, FontGlyph());
+
+	Image::Format require_format = p_rgba ? Image::FORMAT_RGBA8 : Image::FORMAT_LA8;
+
+	FontTexturePosition tex_pos = find_texture_pos_for_glyph(p_data, color_size, require_format, mw, mh, false);
+	ERR_FAIL_COND_V(tex_pos.index < 0, FontGlyph());
+
+	ShelfPackTexture &tex = p_data->textures.write[tex_pos.index];
+	uint8_t *wr = tex.image->ptrw();
+
+	for (int i = 0; i < h; i++) {
+		for (int j = 0; j < w; j++) {
+			int ofs = ((i + tex_pos.y + p_rect_margin * 2) * tex.texture_w + j + tex_pos.x + p_rect_margin * 2) * color_size;
+			ERR_FAIL_COND_V(ofs >= tex.image->get_data_size(), FontGlyph());
+			if (p_rgba) {
+				int src = (i * w + j) * 4;
+				wr[ofs + 0] = p_buffer[src + 0];
+				wr[ofs + 1] = p_buffer[src + 1];
+				wr[ofs + 2] = p_buffer[src + 2];
+				wr[ofs + 3] = p_buffer[src + 3];
+			} else {
+				int src = i * w + j;
+				wr[ofs + 0] = 255;
+				wr[ofs + 1] = p_buffer[src];
+			}
+		}
+	}
+
+	tex.dirty = true;
+
+	chr.texture_idx = tex_pos.index;
+	chr.uv_rect = Rect2(tex_pos.x + p_rect_margin, tex_pos.y + p_rect_margin, w + p_rect_margin * 2, h + p_rect_margin * 2);
+	chr.rect.position = Vector2(p_xofs - p_rect_margin, -p_yofs - p_rect_margin) * p_data->scale;
+	chr.rect.size = chr.uv_rect.size * p_data->scale;
+	return chr;
+}
+#endif
+
 /*************************************************************************/
 /* Font Cache                                                            */
 /*************************************************************************/
@@ -1262,6 +1356,90 @@ bool TextServerAdvanced::_ensure_glyph(FontAdvanced *p_font_data, const Vector2i
 		r_glyph = E->value;
 		return true;
 	}
+
+#if defined(MACOS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+	if (coretext_enabled && fd->ct_font != nullptr) {
+		bool outline = p_size.y > 0;
+		CGGlyph glyph = (CGGlyph)glyph_index;
+		CGRect bounds = CTFontGetBoundingRectsForGlyphs(fd->ct_font, kCTFontOrientationDefault, &glyph, nullptr, 1);
+		CGSize advance = CGSizeZero;
+		CTFontGetAdvancesForGlyphs(fd->ct_font, kCTFontOrientationDefault, &glyph, &advance, 1);
+
+		if (outline && p_size.y > 0) {
+			bounds = CGRectInset(bounds, -p_size.y, -p_size.y);
+		}
+
+		int w = (int)Math::ceil(bounds.size.width);
+		int h = (int)Math::ceil(bounds.size.height);
+		int xofs = (int)Math::floor(bounds.origin.x);
+		int yofs = (int)Math::ceil(bounds.origin.y + bounds.size.height);
+
+		bool use_rgba = _coretext_has_color_glyphs(fd->ct_font);
+
+		Vector<uint8_t> buffer;
+		if (w > 0 && h > 0) {
+			int bytes_per_pixel = use_rgba ? 4 : 1;
+			buffer.resize(w * h * bytes_per_pixel);
+			memset(buffer.ptrw(), 0, buffer.size());
+
+			CGColorSpaceRef color_space = use_rgba ? CGColorSpaceCreateDeviceRGB() : CGColorSpaceCreateDeviceGray();
+			CGBitmapInfo info = use_rgba ? (kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big) : kCGImageAlphaOnly;
+			CGContextRef ctx = CGBitmapContextCreate(buffer.ptrw(), w, h, 8, w * bytes_per_pixel, color_space, info);
+			CGColorSpaceRelease(color_space);
+
+			if (ctx != nullptr) {
+				const bool aa = p_font_data->antialiasing != FONT_ANTIALIASING_NONE;
+				CGContextSetShouldAntialias(ctx, aa);
+				CGContextSetAllowsAntialiasing(ctx, aa);
+				CGContextSetShouldSmoothFonts(ctx, aa);
+				CGContextSetAllowsFontSmoothing(ctx, aa);
+				const bool subpixel = aa && (p_font_data->subpixel_positioning != SUBPIXEL_POSITIONING_DISABLED);
+				CGContextSetShouldSubpixelPositionFonts(ctx, subpixel);
+				CGContextSetAllowsFontSubpixelPositioning(ctx, subpixel);
+				CGContextSetShouldSubpixelQuantizeFonts(ctx, false);
+				CGContextSetAllowsFontSubpixelQuantization(ctx, false);
+				CGContextSetTextMatrix(ctx, CGAffineTransformIdentity);
+
+				if (use_rgba) {
+					CGContextSetRGBFillColor(ctx, 1.0, 1.0, 1.0, 1.0);
+					CGContextSetRGBStrokeColor(ctx, 1.0, 1.0, 1.0, 1.0);
+				} else {
+					CGContextSetGrayFillColor(ctx, 1.0, 1.0);
+					CGContextSetGrayStrokeColor(ctx, 1.0, 1.0);
+				}
+
+				CGPoint pos = CGPointMake(-bounds.origin.x, -bounds.origin.y);
+
+				if (outline && p_size.y > 0) {
+					CGPathRef path = CTFontCreatePathForGlyph(fd->ct_font, glyph, nullptr);
+					if (path != nullptr) {
+						CGContextSaveGState(ctx);
+						CGContextTranslateCTM(ctx, pos.x, pos.y);
+						CGContextSetLineWidth(ctx, (CGFloat)p_size.y * 2.0);
+						CGContextAddPath(ctx, path);
+						CGContextStrokePath(ctx);
+						CGContextRestoreGState(ctx);
+						CGPathRelease(path);
+					}
+				} else {
+					CTFontDrawGlyphs(fd->ct_font, &glyph, &pos, 1, ctx);
+				}
+
+				CGContextRelease(ctx);
+			}
+		}
+
+		FontGlyph gl = rasterize_coretext(fd, rect_range, buffer.ptr(), w, h, xofs, yofs, Vector2(advance.width, advance.height), use_rgba);
+		E = fd->glyph_map.insert(p_glyph, gl);
+		r_glyph = E->value;
+		return gl.found;
+	}
+	if (coretext_enabled && coretext_only) {
+		E = fd->glyph_map.insert(p_glyph, FontGlyph());
+		r_glyph = E->value;
+		return false;
+	}
+#endif
 
 #ifdef MODULE_FREETYPE_ENABLED
 	FontGlyph gl;
@@ -1432,6 +1610,253 @@ bool TextServerAdvanced::_ensure_cache_for_size(FontAdvanced *p_font_data, const
 	fd->size = p_size;
 	if (p_font_data->data_ptr && (p_font_data->data_size > 0)) {
 		// Init dynamic font.
+#if defined(MACOS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+		if (coretext_enabled) {
+			double sz = double(fd->size.x) / 64.0;
+			if (p_font_data->msdf) {
+				sz = p_font_data->msdf_source_size;
+			}
+
+			if (p_font_data->ct_descriptors == nullptr) {
+				CFDataRef data = CFDataCreate(kCFAllocatorDefault, p_font_data->data_ptr, p_font_data->data_size);
+				if (data == nullptr) {
+					memdelete(fd);
+					if (p_silent) {
+						return false;
+					} else {
+						ERR_FAIL_V_MSG(false, "CoreText: Error creating font data.");
+					}
+				}
+				p_font_data->ct_descriptors = CTFontManagerCreateFontDescriptorsFromData(data);
+				CFRelease(data);
+				if (p_font_data->ct_descriptors == nullptr || CFArrayGetCount(p_font_data->ct_descriptors) == 0) {
+					if (p_font_data->ct_descriptors != nullptr) {
+						CFRelease(p_font_data->ct_descriptors);
+						p_font_data->ct_descriptors = nullptr;
+					}
+					memdelete(fd);
+					if (p_silent) {
+						return false;
+					} else {
+						ERR_FAIL_V_MSG(false, "CoreText: Error loading font descriptors.");
+					}
+				}
+			}
+
+			CFIndex face_count = CFArrayGetCount(p_font_data->ct_descriptors);
+			int face_index = CLAMP(p_font_data->face_index, 0, (int)face_count - 1);
+			CTFontDescriptorRef descriptor = (CTFontDescriptorRef)CFArrayGetValueAtIndex(p_font_data->ct_descriptors, face_index);
+			CGAffineTransform transform = CGAffineTransformMake(p_font_data->transform[0][0], p_font_data->transform[0][1], p_font_data->transform[1][0], p_font_data->transform[1][1], 0.0, 0.0);
+			const CGAffineTransform *transform_ptr = (p_font_data->transform == Transform2D()) ? nullptr : &transform;
+			fd->ct_font = CTFontCreateWithFontDescriptor(descriptor, sz, transform_ptr);
+
+			if (fd->ct_font == nullptr) {
+				memdelete(fd);
+				if (p_silent) {
+					return false;
+				} else {
+					ERR_FAIL_V_MSG(false, "CoreText: Error creating font instance.");
+				}
+			}
+
+			if (!p_font_data->variation_coordinates.is_empty()) {
+				CTFontDescriptorRef var_desc = CTFontCopyFontDescriptor(fd->ct_font);
+				if (var_desc != nullptr) {
+					bool has_variation = false;
+					Array keys = p_font_data->variation_coordinates.keys();
+					for (int i = 0; i < keys.size(); i++) {
+						const Variant key = keys[i];
+						int32_t tag = 0;
+						if (key.get_type() == Variant::INT) {
+							tag = (int32_t)key;
+						} else if (key.get_type() == Variant::STRING) {
+							tag = _name_to_tag(key);
+						}
+						if (tag == 0) {
+							continue;
+						}
+						const double value = (double)p_font_data->variation_coordinates[key];
+						CFNumberRef tag_num = CFNumberCreate(kCFAllocatorDefault, kCFNumberIntType, &tag);
+						if (tag_num != nullptr) {
+							CTFontDescriptorRef new_desc = CTFontDescriptorCreateCopyWithVariation(var_desc, tag_num, (CGFloat)value);
+							CFRelease(tag_num);
+							if (new_desc != nullptr) {
+								CFRelease(var_desc);
+								var_desc = new_desc;
+								has_variation = true;
+							}
+						}
+					}
+					if (has_variation) {
+						CTFontRef var_font = CTFontCreateWithFontDescriptor(var_desc, sz, transform_ptr);
+						if (var_font != nullptr) {
+							CFRelease(fd->ct_font);
+							fd->ct_font = var_font;
+						}
+					}
+					CFRelease(var_desc);
+				}
+			}
+
+			fd->hb_handle = hb_coretext_font_create(fd->ct_font);
+			if (fd->hb_handle != nullptr) {
+				hb_font_set_scale(fd->hb_handle, fd->size.x, fd->size.x);
+				hb_font_set_ppem(fd->hb_handle, (unsigned int)Math::round(sz), (unsigned int)Math::round(sz));
+			}
+
+			fd->ascent = CTFontGetAscent(fd->ct_font);
+			fd->descent = CTFontGetDescent(fd->ct_font);
+			fd->underline_position = CTFontGetUnderlinePosition(fd->ct_font);
+			fd->underline_thickness = CTFontGetUnderlineThickness(fd->ct_font);
+			fd->scale = 1.0;
+
+			if (!p_font_data->face_init) {
+				CFStringRef family = CTFontCopyFamilyName(fd->ct_font);
+				if (family != nullptr) {
+					char name_buf[1024] = {};
+					if (CFStringGetCString(family, name_buf, sizeof(name_buf), kCFStringEncodingUTF8)) {
+						p_font_data->font_name = String::utf8(name_buf);
+					}
+					CFRelease(family);
+				}
+
+				CFStringRef style = CTFontCopyName(fd->ct_font, kCTFontStyleNameKey);
+				if (style != nullptr) {
+					char style_buf[1024] = {};
+					if (CFStringGetCString(style, style_buf, sizeof(style_buf), kCFStringEncodingUTF8)) {
+						p_font_data->style_name = String::utf8(style_buf);
+					}
+					CFRelease(style);
+				}
+
+				p_font_data->weight = _font_get_weight_by_name(p_font_data->style_name.to_lower());
+				p_font_data->stretch = _font_get_stretch_by_name(p_font_data->style_name.to_lower());
+				p_font_data->style_flags = 0;
+
+				CTFontSymbolicTraits traits = CTFontGetSymbolicTraits(fd->ct_font);
+				if (traits & kCTFontBoldTrait) {
+					p_font_data->style_flags.set_flag(FONT_BOLD);
+				}
+				if (traits & kCTFontItalicTrait) {
+					p_font_data->style_flags.set_flag(FONT_ITALIC);
+				}
+				if (traits & kCTFontMonoSpaceTrait) {
+					p_font_data->style_flags.set_flag(FONT_FIXED_WIDTH);
+				}
+
+				CFDictionaryRef ct_traits = CTFontCopyTraits(fd->ct_font);
+				if (ct_traits != nullptr) {
+					CFNumberRef weight_trait = (CFNumberRef)CFDictionaryGetValue(ct_traits, kCTFontWeightTrait);
+					double weight_value = 0.0;
+					if (weight_trait != nullptr && CFNumberGetValue(weight_trait, kCFNumberDoubleType, &weight_value)) {
+						int weight = (int)Math::round(((weight_value + 1.0) * 400.0) + 100.0);
+						p_font_data->weight = CLAMP(weight, 100, 999);
+					}
+
+					CFNumberRef width_trait = (CFNumberRef)CFDictionaryGetValue(ct_traits, kCTFontWidthTrait);
+					double width_value = 0.0;
+					if (width_trait != nullptr && CFNumberGetValue(width_trait, kCFNumberDoubleType, &width_value)) {
+						int stretch = (int)Math::round(100.0 + width_value * 100.0);
+						p_font_data->stretch = CLAMP(stretch, 50, 200);
+					}
+					CFRelease(ct_traits);
+				}
+
+				if (p_font_data->weight >= 700) {
+					p_font_data->style_flags.set_flag(FONT_BOLD);
+				}
+				if (_is_ital_style(p_font_data->style_name.to_lower())) {
+					p_font_data->style_flags.set_flag(FONT_ITALIC);
+				}
+
+				hb_face_t *hb_face = hb_font_get_face(fd->hb_handle);
+
+				p_font_data->supported_scripts.clear();
+				unsigned int count = hb_ot_layout_table_get_script_tags(hb_face, HB_OT_TAG_GSUB, 0, nullptr, nullptr);
+				if (count != 0) {
+					hb_tag_t *script_tags = (hb_tag_t *)memalloc(count * sizeof(hb_tag_t));
+					hb_ot_layout_table_get_script_tags(hb_face, HB_OT_TAG_GSUB, 0, &count, script_tags);
+					for (unsigned int i = 0; i < count; i++) {
+						p_font_data->supported_scripts.insert(script_tags[i]);
+					}
+					memfree(script_tags);
+				}
+				count = hb_ot_layout_table_get_script_tags(hb_face, HB_OT_TAG_GPOS, 0, nullptr, nullptr);
+				if (count != 0) {
+					hb_tag_t *script_tags = (hb_tag_t *)memalloc(count * sizeof(hb_tag_t));
+					hb_ot_layout_table_get_script_tags(hb_face, HB_OT_TAG_GPOS, 0, &count, script_tags);
+					for (unsigned int i = 0; i < count; i++) {
+						p_font_data->supported_scripts.insert(script_tags[i]);
+					}
+					memfree(script_tags);
+				}
+
+				p_font_data->supported_features.clear();
+				count = hb_ot_layout_table_get_feature_tags(hb_face, HB_OT_TAG_GSUB, 0, nullptr, nullptr);
+				if (count != 0) {
+					hb_tag_t *feature_tags = (hb_tag_t *)memalloc(count * sizeof(hb_tag_t));
+					hb_ot_layout_table_get_feature_tags(hb_face, HB_OT_TAG_GSUB, 0, &count, feature_tags);
+					for (unsigned int i = 0; i < count; i++) {
+						Dictionary ftr;
+						ftr["type"] = _get_tag_type(feature_tags[i]);
+						ftr["hidden"] = _get_tag_hidden(feature_tags[i]);
+						p_font_data->supported_features[feature_tags[i]] = ftr;
+					}
+					memfree(feature_tags);
+				}
+				count = hb_ot_layout_table_get_feature_tags(hb_face, HB_OT_TAG_GPOS, 0, nullptr, nullptr);
+				if (count != 0) {
+					hb_tag_t *feature_tags = (hb_tag_t *)memalloc(count * sizeof(hb_tag_t));
+					hb_ot_layout_table_get_feature_tags(hb_face, HB_OT_TAG_GPOS, 0, &count, feature_tags);
+					for (unsigned int i = 0; i < count; i++) {
+						Dictionary ftr;
+						ftr["type"] = _get_tag_type(feature_tags[i]);
+						ftr["hidden"] = _get_tag_hidden(feature_tags[i]);
+						p_font_data->supported_features[feature_tags[i]] = ftr;
+					}
+					memfree(feature_tags);
+				}
+
+				p_font_data->supported_varaitions.clear();
+				CFArrayRef axes = CTFontCopyVariationAxes(fd->ct_font);
+				if (axes != nullptr) {
+					CFIndex axis_count = CFArrayGetCount(axes);
+					for (CFIndex axis_index = 0; axis_index < axis_count; axis_index++) {
+						CFDictionaryRef axis = (CFDictionaryRef)CFArrayGetValueAtIndex(axes, axis_index);
+						if (axis == nullptr) {
+							continue;
+						}
+						CFNumberRef id = (CFNumberRef)CFDictionaryGetValue(axis, kCTFontVariationAxisIdentifierKey);
+						CFNumberRef min_v = (CFNumberRef)CFDictionaryGetValue(axis, kCTFontVariationAxisMinimumValueKey);
+						CFNumberRef max_v = (CFNumberRef)CFDictionaryGetValue(axis, kCTFontVariationAxisMaximumValueKey);
+						CFNumberRef def_v = (CFNumberRef)CFDictionaryGetValue(axis, kCTFontVariationAxisDefaultValueKey);
+						int32_t tag = 0;
+						double min_value = 0.0;
+						double max_value = 0.0;
+						double def_value = 0.0;
+						if (id != nullptr) {
+							CFNumberGetValue(id, kCFNumberSInt32Type, &tag);
+						}
+						if (min_v != nullptr) {
+							CFNumberGetValue(min_v, kCFNumberDoubleType, &min_value);
+						}
+						if (max_v != nullptr) {
+							CFNumberGetValue(max_v, kCFNumberDoubleType, &max_value);
+						}
+						if (def_v != nullptr) {
+							CFNumberGetValue(def_v, kCFNumberDoubleType, &def_value);
+						}
+						if (tag != 0) {
+							p_font_data->supported_varaitions[tag] = Vector3i((int)Math::round(min_value), (int)Math::round(max_value), (int)Math::round(def_value));
+						}
+					}
+					CFRelease(axes);
+				}
+				p_font_data->face_init = true;
+			}
+		} else
+#endif
+		{
 #ifdef MODULE_FREETYPE_ENABLED
 		int error = 0;
 		{
@@ -1957,6 +2382,7 @@ bool TextServerAdvanced::_ensure_cache_for_size(FontAdvanced *p_font_data, const
 			ERR_FAIL_V_MSG(false, "FreeType: Can't load dynamic font, engine is compiled without FreeType support!");
 		}
 #endif
+		}
 	} else {
 		// Init bitmap font.
 		fd->hb_handle = _bmp_font_create(fd, nullptr);
@@ -2035,6 +2461,12 @@ _FORCE_INLINE_ void TextServerAdvanced::_font_clear_cache(FontAdvanced *p_font_d
 	p_font_data->supported_features.clear();
 	p_font_data->supported_varaitions.clear();
 	p_font_data->supported_scripts.clear();
+#if defined(MACOS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+	if (p_font_data->ct_descriptors != nullptr) {
+		CFRelease(p_font_data->ct_descriptors);
+		p_font_data->ct_descriptors = nullptr;
+	}
+#endif
 }
 
 bool TextServerAdvanced::_font_is_color(const RID &p_font_rid) const {
@@ -2046,6 +2478,14 @@ bool TextServerAdvanced::_font_is_color(const RID &p_font_rid) const {
 
 	FontForSizeAdvanced *ffsd = nullptr;
 	ERR_FAIL_COND_V(!_ensure_cache_for_size(fd, size, ffsd), false);
+#if defined(MACOS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+	if (coretext_enabled && ffsd->ct_font != nullptr) {
+		return _coretext_has_color_glyphs(ffsd->ct_font);
+	}
+	if (coretext_enabled && coretext_only) {
+		return false;
+	}
+#endif
 #ifdef MODULE_FREETYPE_ENABLED
 	return ffsd->face && FT_HAS_COLOR(ffsd->face);
 #else
@@ -2062,11 +2502,22 @@ hb_font_t *TextServerAdvanced::_font_get_hb_handle(const RID &p_font_rid, int64_
 
 	FontForSizeAdvanced *ffsd = nullptr;
 	ERR_FAIL_COND_V(!_ensure_cache_for_size(fd, size, ffsd), nullptr);
-#ifdef MODULE_FREETYPE_ENABLED
-	r_is_color = ffsd->face && FT_HAS_COLOR(ffsd->face);
-#else
-	r_is_color = false;
+#if defined(MACOS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+	if (coretext_enabled && ffsd->ct_font != nullptr) {
+		r_is_color = _coretext_has_color_glyphs(ffsd->ct_font);
+	} else
+	if (coretext_enabled && coretext_only) {
+		r_is_color = false;
+		return ffsd->hb_handle;
+	} else
 #endif
+	{
+#ifdef MODULE_FREETYPE_ENABLED
+		r_is_color = ffsd->face && FT_HAS_COLOR(ffsd->face);
+#else
+		r_is_color = false;
+#endif
+	}
 
 	return ffsd->hb_handle;
 }
@@ -2148,6 +2599,21 @@ int64_t TextServerAdvanced::_font_get_face_count(const RID &p_font_rid) const {
 
 	if (fd->data_ptr && (fd->data_size > 0)) {
 		// Init dynamic font.
+#if defined(MACOS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+		if (coretext_enabled) {
+			if (fd->ct_descriptors == nullptr) {
+				CFDataRef data = CFDataCreate(kCFAllocatorDefault, fd->data_ptr, fd->data_size);
+				if (data != nullptr) {
+					fd->ct_descriptors = CTFontManagerCreateFontDescriptorsFromData(data);
+					CFRelease(data);
+				}
+			}
+			if (fd->ct_descriptors != nullptr) {
+				face_count = CFArrayGetCount(fd->ct_descriptors);
+			}
+			return face_count;
+		}
+#endif
 #ifdef MODULE_FREETYPE_ENABLED
 		int error = 0;
 		if (!ft_library) {
@@ -2477,6 +2943,13 @@ void TextServerAdvanced::_font_set_multichannel_signed_distance_field(const RID 
 	ERR_FAIL_NULL(fd);
 
 	MutexLock lock(fd->mutex);
+	if (coretext_enabled) {
+		if (fd->msdf) {
+			_font_clear_cache(fd);
+		}
+		fd->msdf = false;
+		return;
+	}
 	if (fd->msdf != p_msdf) {
 		_font_clear_cache(fd);
 		fd->msdf = p_msdf;
@@ -3729,6 +4202,19 @@ Vector2 TextServerAdvanced::_font_get_kerning(const RID &p_font_rid, int64_t p_s
 			return kern[p_glyph_pair];
 		}
 	} else {
+#if defined(MACOS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+		// TODO: getting the kerning information is of limited use
+		// in the Godot editor, it is surfaced on the Font as a property
+		// but I can not find a use for it in practice.
+		//
+		// The alternative seems very expensive
+		if (coretext_enabled && ffsd->ct_font != nullptr) {
+			return Vector2();
+		}
+		if (coretext_enabled && coretext_only) {
+			return Vector2();
+		}
+#endif
 #ifdef MODULE_FREETYPE_ENABLED
 		if (ffsd->face) {
 			FT_Vector delta;
@@ -3761,6 +4247,21 @@ int64_t TextServerAdvanced::_font_get_glyph_index(const RID &p_font_rid, int64_t
 	FontForSizeAdvanced *ffsd = nullptr;
 	ERR_FAIL_COND_V(!_ensure_cache_for_size(fd, size, ffsd), 0);
 
+#if defined(MACOS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+	if (coretext_enabled && ffsd->ct_font != nullptr) {
+		UniChar chars[2] = {};
+		int len = _coretext_codepoint_to_utf16(p_char, chars);
+		CGGlyph glyphs[2] = {};
+		if (CTFontGetGlyphsForCharacters(ffsd->ct_font, chars, glyphs, len)) {
+			return glyphs[0];
+		}
+		return 0;
+	}
+	if (coretext_enabled && coretext_only) {
+		return 0;
+	}
+#endif
+
 #ifdef MODULE_FREETYPE_ENABLED
 	if (ffsd->face) {
 		if (p_variation_selector) {
@@ -3784,6 +4285,26 @@ int64_t TextServerAdvanced::_font_get_char_from_glyph_index(const RID &p_font_ri
 	Vector2i size = _get_size(fd, p_size);
 	FontForSizeAdvanced *ffsd = nullptr;
 	ERR_FAIL_COND_V(!_ensure_cache_for_size(fd, size, ffsd), 0);
+
+#if defined(MACOS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+	// TODO: CoreTExt does not expose a way of querying the
+	// character from a glyph index, this would have been nice
+	//
+	// The upside is that nothing in the Godot Editor seems to use it.
+	//
+	// The downside is that this is precisely what a modern VT100
+	// emulator would like to get it, and on Apple, we need to resort
+	// to hacks.
+	//
+	// Returning the p_glyph_index matches both the fallback here
+	// and the one in the FB text server
+	if (coretext_enabled && ffsd->ct_font != nullptr) {
+		return p_glyph_index;
+	}
+	if (coretext_enabled && coretext_only) {
+		return p_glyph_index;
+	}
+#endif
 
 #ifdef MODULE_FREETYPE_ENABLED
 	if (ffsd->inv_glyph_map.is_empty()) {
@@ -3823,6 +4344,18 @@ bool TextServerAdvanced::_font_has_char(const RID &p_font_rid, int64_t p_char) c
 		ffsd = fd->cache.begin()->value;
 	}
 
+#if defined(MACOS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+	if (coretext_enabled && ffsd->ct_font != nullptr) {
+		UniChar chars[2] = {};
+		int len = _coretext_codepoint_to_utf16(p_char, chars);
+		CGGlyph glyphs[2] = {};
+		return CTFontGetGlyphsForCharacters(ffsd->ct_font, chars, glyphs, len);
+	}
+	if (coretext_enabled && coretext_only) {
+		return false;
+	}
+#endif
+
 #ifdef MODULE_FREETYPE_ENABLED
 	if (ffsd->face) {
 		return FT_Get_Char_Index(ffsd->face, p_char) != 0;
@@ -3842,6 +4375,15 @@ String TextServerAdvanced::_font_get_supported_chars(const RID &p_font_rid) cons
 	} else {
 		ffsd = fd->cache.begin()->value;
 	}
+
+#if defined(MACOS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+	if (coretext_enabled && ffsd->ct_font != nullptr) {
+		return String();
+	}
+	if (coretext_enabled && coretext_only) {
+		return String();
+	}
+#endif
 
 	String chars;
 #ifdef MODULE_FREETYPE_ENABLED
@@ -3877,6 +4419,14 @@ PackedInt32Array TextServerAdvanced::_font_get_supported_glyphs(const RID &p_fon
 	}
 
 	PackedInt32Array glyphs;
+#if defined(MACOS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+	if (coretext_enabled && at_size && at_size->ct_font != nullptr) {
+		return glyphs;
+	}
+	if (coretext_enabled && coretext_only) {
+		return glyphs;
+	}
+#endif
 #ifdef MODULE_FREETYPE_ENABLED
 	if (at_size && at_size->face) {
 		FT_UInt gindex;
@@ -3908,6 +4458,39 @@ void TextServerAdvanced::_font_render_range(const RID &p_font_rid, const Vector2
 	FontForSizeAdvanced *ffsd = nullptr;
 	ERR_FAIL_COND(!_ensure_cache_for_size(fd, size, ffsd));
 	for (int64_t i = p_start; i <= p_end; i++) {
+#if defined(MACOS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+		if (coretext_enabled && ffsd->ct_font != nullptr) {
+			UniChar chars[2] = {};
+			int len = _coretext_codepoint_to_utf16((uint32_t)i, chars);
+			CGGlyph glyphs[2] = {};
+			if (!CTFontGetGlyphsForCharacters(ffsd->ct_font, chars, glyphs, len)) {
+				continue;
+			}
+			int32_t idx = glyphs[0];
+			FontGlyph fgl;
+			if (fd->msdf) {
+				_ensure_glyph(fd, size, (int32_t)idx, fgl);
+			} else {
+				for (int aa = 0; aa < ((fd->antialiasing == FONT_ANTIALIASING_LCD) ? FONT_LCD_SUBPIXEL_LAYOUT_MAX : 1); aa++) {
+					if ((fd->subpixel_positioning == SUBPIXEL_POSITIONING_ONE_QUARTER) || (fd->subpixel_positioning == SUBPIXEL_POSITIONING_AUTO && size.x <= SUBPIXEL_POSITIONING_ONE_QUARTER_MAX_SIZE * 64)) {
+						_ensure_glyph(fd, size, (int32_t)idx | (0 << 27) | (aa << 24), fgl);
+						_ensure_glyph(fd, size, (int32_t)idx | (1 << 27) | (aa << 24), fgl);
+						_ensure_glyph(fd, size, (int32_t)idx | (2 << 27) | (aa << 24), fgl);
+						_ensure_glyph(fd, size, (int32_t)idx | (3 << 27) | (aa << 24), fgl);
+					} else if ((fd->subpixel_positioning == SUBPIXEL_POSITIONING_ONE_HALF) || (fd->subpixel_positioning == SUBPIXEL_POSITIONING_AUTO && size.x <= SUBPIXEL_POSITIONING_ONE_HALF_MAX_SIZE * 64)) {
+						_ensure_glyph(fd, size, (int32_t)idx | (1 << 27) | (aa << 24), fgl);
+						_ensure_glyph(fd, size, (int32_t)idx | (0 << 27) | (aa << 24), fgl);
+					} else {
+						_ensure_glyph(fd, size, (int32_t)idx | (aa << 24), fgl);
+					}
+				}
+			}
+			continue;
+		}
+		if (coretext_enabled && coretext_only) {
+			continue;
+		}
+#endif
 #ifdef MODULE_FREETYPE_ENABLED
 		int32_t idx = FT_Get_Char_Index(ffsd->face, i);
 		if (ffsd->face) {
@@ -3942,6 +4525,33 @@ void TextServerAdvanced::_font_render_glyph(const RID &p_font_rid, const Vector2
 	Vector2i size = _get_size_outline(fd, p_size);
 	FontForSizeAdvanced *ffsd = nullptr;
 	ERR_FAIL_COND(!_ensure_cache_for_size(fd, size, ffsd));
+#if defined(MACOS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+	if (coretext_enabled && ffsd->ct_font != nullptr) {
+		int32_t idx = p_index & 0xffffff; // Remove subpixel shifts.
+		FontGlyph fgl;
+		if (fd->msdf) {
+			_ensure_glyph(fd, size, (int32_t)idx, fgl);
+		} else {
+			for (int aa = 0; aa < ((fd->antialiasing == FONT_ANTIALIASING_LCD) ? FONT_LCD_SUBPIXEL_LAYOUT_MAX : 1); aa++) {
+				if ((fd->subpixel_positioning == SUBPIXEL_POSITIONING_ONE_QUARTER) || (fd->subpixel_positioning == SUBPIXEL_POSITIONING_AUTO && size.x <= SUBPIXEL_POSITIONING_ONE_QUARTER_MAX_SIZE * 64)) {
+					_ensure_glyph(fd, size, (int32_t)idx | (0 << 27) | (aa << 24), fgl);
+					_ensure_glyph(fd, size, (int32_t)idx | (1 << 27) | (aa << 24), fgl);
+					_ensure_glyph(fd, size, (int32_t)idx | (2 << 27) | (aa << 24), fgl);
+					_ensure_glyph(fd, size, (int32_t)idx | (3 << 27) | (aa << 24), fgl);
+				} else if ((fd->subpixel_positioning == SUBPIXEL_POSITIONING_ONE_HALF) || (fd->subpixel_positioning == SUBPIXEL_POSITIONING_AUTO && size.x <= SUBPIXEL_POSITIONING_ONE_HALF_MAX_SIZE * 64)) {
+					_ensure_glyph(fd, size, (int32_t)idx | (1 << 27) | (aa << 24), fgl);
+					_ensure_glyph(fd, size, (int32_t)idx | (0 << 27) | (aa << 24), fgl);
+				} else {
+					_ensure_glyph(fd, size, (int32_t)idx | (aa << 24), fgl);
+				}
+			}
+		}
+		return;
+	}
+	if (coretext_enabled && coretext_only) {
+		return;
+	}
+#endif
 #ifdef MODULE_FREETYPE_ENABLED
 	int32_t idx = p_index & 0xffffff; // Remove subpixel shifts.
 	if (ffsd->face) {
@@ -4043,6 +4653,11 @@ void TextServerAdvanced::_font_draw_glyph(const RID &p_font_rid, const RID &p_ca
 			Color modulate = p_color;
 #ifdef MODULE_FREETYPE_ENABLED
 			if (!fd->modulate_color_glyphs && ffsd->face && ffsd->textures[fgl.texture_idx].image.is_valid() && (ffsd->textures[fgl.texture_idx].image->get_format() == Image::FORMAT_RGBA8) && !lcd_aa && !fd->msdf) {
+				modulate.r = modulate.g = modulate.b = 1.0;
+			}
+#endif
+#if defined(MACOS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+			if (!fd->modulate_color_glyphs && coretext_enabled && ffsd->ct_font != nullptr && ffsd->textures[fgl.texture_idx].image.is_valid() && (ffsd->textures[fgl.texture_idx].image->get_format() == Image::FORMAT_RGBA8) && !lcd_aa && !fd->msdf) {
 				modulate.r = modulate.g = modulate.b = 1.0;
 			}
 #endif
@@ -8123,6 +8738,15 @@ bool TextServerAdvanced::_is_valid_letter(uint64_t p_unicode) const {
 void TextServerAdvanced::_update_settings() {
 	lcd_subpixel_layout.set((TextServer::FontLCDSubpixelLayout)(int)GLOBAL_GET("gui/theme/lcd_subpixel_layout"));
 	lb_strictness = (LineBreakStrictness)(int)GLOBAL_GET("internationalization/locale/line_breaking_strictness");
+#if defined(MACOS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+	if (ProjectSettings::get_singleton()->has_setting("text_server/advanced/coretext_only")) {
+		coretext_only = coretext_enabled && bool(GLOBAL_GET("text_server/advanced/coretext_only"));
+	} else {
+		coretext_only = false;
+	}
+#else
+	coretext_only = false;
+#endif
 }
 
 TextServerAdvanced::TextServerAdvanced() {

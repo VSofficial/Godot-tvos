@@ -43,6 +43,12 @@ void initialize_text_server_adv_module(ModuleInitializationLevel p_level) {
 		Ref<TextServerAdvanced> ts;
 		ts.instantiate();
 		tsman->add_interface(ts);
+#if defined(MACOS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+		Ref<TextServerAdvanced> ts_coretext;
+		ts_coretext.instantiate();
+		ts_coretext->set_coretext_enabled(true);
+		tsman->add_interface(ts_coretext);
+#endif
 	}
 }
 

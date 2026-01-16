@@ -137,11 +137,19 @@ GODOT_CLANG_WARNING_POP
 #include <hb-icu.h>
 #include <hb.h>
 
+#if defined(MACOS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+#include <CoreGraphics/CoreGraphics.h>
+#include <CoreText/CoreText.h>
+#endif
+
 /*************************************************************************/
 
 class TextServerAdvanced : public TextServerExtension {
 	GDCLASS(TextServerAdvanced, TextServerExtension);
 	_THREAD_SAFE_CLASS_
+
+	bool coretext_enabled = false;
+	bool coretext_only = false;
 
 	struct FeatureInfo {
 		StringName name;
@@ -299,6 +307,9 @@ class TextServerAdvanced : public TextServerExtension {
 		FT_Face face = nullptr;
 		FT_StreamRec stream;
 #endif
+#if defined(MACOS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+		CTFontRef ct_font = nullptr;
+#endif
 
 		~FontForSizeAdvanced() {
 			if (hb_handle != nullptr) {
@@ -307,6 +318,11 @@ class TextServerAdvanced : public TextServerExtension {
 #ifdef MODULE_FREETYPE_ENABLED
 			if (face != nullptr) {
 				FT_Done_Face(face);
+			}
+#endif
+#if defined(MACOS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+			if (ct_font != nullptr) {
+				CFRelease(ct_font);
 			}
 #endif
 		}
@@ -371,12 +387,20 @@ class TextServerAdvanced : public TextServerExtension {
 		const uint8_t *data_ptr = nullptr;
 		size_t data_size;
 		int face_index = 0;
+#if defined(MACOS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+		CFArrayRef ct_descriptors = nullptr;
+#endif
 
 		~FontAdvanced() {
 			for (const KeyValue<Vector2i, FontForSizeAdvanced *> &E : cache) {
 				memdelete(E.value);
 			}
 			cache.clear();
+#if defined(MACOS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+			if (ct_descriptors != nullptr) {
+				CFRelease(ct_descriptors);
+			}
+#endif
 		}
 	};
 
@@ -386,6 +410,9 @@ class TextServerAdvanced : public TextServerExtension {
 #endif
 #ifdef MODULE_FREETYPE_ENABLED
 	_FORCE_INLINE_ FontGlyph rasterize_bitmap(FontForSizeAdvanced *p_data, int p_rect_margin, FT_Bitmap p_bitmap, int p_yofs, int p_xofs, const Vector2 &p_advance, bool p_bgra) const;
+#endif
+#if defined(MACOS_ENABLED) || defined(APPLE_EMBEDDED_ENABLED)
+	_FORCE_INLINE_ FontGlyph rasterize_coretext(FontForSizeAdvanced *p_data, int p_rect_margin, const uint8_t *p_buffer, int p_width, int p_height, int p_xofs, int p_yofs, const Vector2 &p_advance, bool p_rgba) const;
 #endif
 	bool _ensure_glyph(FontAdvanced *p_font_data, const Vector2i &p_size, int32_t p_glyph, FontGlyph &r_glyph, uint32_t p_oversampling = 0) const;
 	bool _ensure_cache_for_size(FontAdvanced *p_font_data, const Vector2i &p_size, FontForSizeAdvanced *&r_cache_for_size, bool p_silent = false, uint32_t p_oversampling = 0) const;
@@ -823,6 +850,14 @@ protected:
 	void invalidate(ShapedTextDataAdvanced *p_shaped, bool p_text = false);
 
 public:
+	void set_coretext_enabled(bool p_enabled) {
+		coretext_enabled = p_enabled;
+		_update_settings();
+	}
+	bool is_coretext_enabled() const { return coretext_enabled; }
+	void set_coretext_only(bool p_enabled) { coretext_only = p_enabled; }
+	bool is_coretext_only() const { return coretext_only; }
+
 	MODBIND1RC(bool, has_feature, Feature);
 	MODBIND0RC(String, get_name);
 	MODBIND0RC(int64_t, get_features);

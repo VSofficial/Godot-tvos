@@ -305,6 +305,7 @@ thirdparty_harfbuzz_sources = [
     # "src/hb-cairo-utils.cc",
     # "src/hb-cairo.cc",
     "src/hb-common.cc",
+    # "src/hb-coretext.cc",
     # "src/hb-coretext-font.cc",
     # "src/hb-coretext-shape.cc",
     # "src/hb-directwrite.cc",
@@ -371,6 +372,15 @@ thirdparty_harfbuzz_sources = [
     # "src/hb-uniscribe.cc",
     "src/OT/Var/VARC/VARC.cc",
 ]
+
+if env["platform"] in ["ios", "macos", "visionos"]:
+    thirdparty_harfbuzz_sources += [
+        "src/hb-coretext.cc",
+        "src/hb-coretext-font.cc",
+        "src/hb-coretext-shape.cc",
+    ]
+    env_harfbuzz.Append(CPPDEFINES=["HAVE_CORETEXT"])
+    env.Append(LINKFLAGS=["-framework", "CoreText", "-framework", "CoreGraphics"])
 
 if env["freetype_enabled"]:
     thirdparty_harfbuzz_sources += [

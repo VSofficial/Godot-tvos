@@ -196,6 +196,7 @@ static bool _start_success = false;
 String display_driver = "";
 String tablet_driver = "";
 String text_driver = "";
+static bool coretext_only = false;
 String rendering_driver = "";
 String rendering_method = "";
 static int text_driver_idx = -1;
@@ -611,6 +612,7 @@ void Main::print_help(const char *p_binary) {
 	print_help_option("--rendering-driver <driver>", "Rendering driver (depends on display driver).\n");
 	print_help_option("--gpu-index <device_index>", "Use a specific GPU (run with --verbose to get a list of available devices).\n");
 	print_help_option("--text-driver <driver>", "Text driver (used for font rendering, bidirectional support and shaping).\n");
+	print_help_option("--coretext-only", "Disable FreeType fallback when using the CoreText text driver.\n");
 	print_help_option("--tablet-driver <driver>", "Pen tablet input driver.\n");
 	print_help_option("--headless", "Enable headless mode (--display-driver headless --audio-driver Dummy). Useful for servers and with --script.\n");
 	print_help_option("--log-file <file>", "Write output/error log to the specified path instead of the default location defined by the project.\n");
@@ -1232,6 +1234,8 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 				OS::get_singleton()->print("Missing text driver argument, aborting.\n");
 				goto error;
 			}
+		} else if (arg == "--coretext-only") {
+			coretext_only = true;
 
 		} else if (arg == "--display-driver") { // force video driver
 
@@ -3565,6 +3569,7 @@ Error Main::setup2(bool p_show_boot_logo) {
 
 		/* Enum text drivers */
 		GLOBAL_DEF_RST("internationalization/rendering/text_driver", "");
+		GLOBAL_DEF_RST("text_server/advanced/coretext_only", false);
 		String text_driver_options;
 		for (int i = 0; i < TextServerManager::get_singleton()->get_interface_count(); i++) {
 			const String driver_name = TextServerManager::get_singleton()->get_interface(i)->get_name();
@@ -3579,6 +3584,9 @@ Error Main::setup2(bool p_show_boot_logo) {
 			text_driver_options += driver_name;
 		}
 		ProjectSettings::get_singleton()->set_custom_property_info(PropertyInfo(Variant::STRING, "internationalization/rendering/text_driver", PROPERTY_HINT_ENUM, text_driver_options));
+		if (coretext_only) {
+			ProjectSettings::get_singleton()->set_setting("text_server/advanced/coretext_only", true);
+		}
 
 		/* Determine text driver */
 		if (text_driver.is_empty()) {

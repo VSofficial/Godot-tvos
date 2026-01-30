@@ -252,3 +252,47 @@ String EditorExportPlatformTVOS::_process_config_file_line(const Ref<EditorExpor
 
 	return strnew;
 }
+
+Vector<EditorExportPlatformAppleEmbedded::IconInfo>
+EditorExportPlatformTVOS::get_icon_infos() const {
+
+	Vector<EditorExportPlatformAppleEmbedded::IconInfo> icons;
+
+	icons.push_back({
+			"icons/tvos_small_app_icon",
+			"Small App Icon",
+			"400x240",
+			"1x",
+			"",
+			"tv"
+	});
+
+	icons.push_back({
+			"icons/tvos_large_app_icon",
+			"Large App Icon",
+			"1280x768",
+			"1x",
+			"",
+			"tv"
+	});
+
+	icons.push_back({
+			"icons/tvos_top_shelf",
+			"Top Shelf Image",
+			"1920x720",
+			"1x",
+			"top shelf image",
+			"tv"
+	});
+
+	icons.push_back({
+			"icons/tvos_top_shelf_wide",
+			"Top Shelf Wide Image",
+			"2320x720",
+			"1x",
+			"top shelf image wide",
+			"tv"
+	});
+
+	return icons;
+}

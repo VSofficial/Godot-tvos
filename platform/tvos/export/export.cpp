@@ -34,6 +34,7 @@
 
 #include "editor/export/editor_export.h"
 
+
 void register_tvos_exporter_types() {
 	GDREGISTER_VIRTUAL_CLASS(EditorExportPlatformTVOS);
 }

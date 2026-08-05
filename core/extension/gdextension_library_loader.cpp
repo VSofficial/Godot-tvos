@@ -197,6 +197,7 @@ Error GDExtensionLibraryLoader::open_library(const String &p_path) {
 		&abs_dependencies_paths, // library_dependencies
 	};
 
+<<<<<<< HEAD
 	// Apple has a complex lookup system which goes beyond looking up the filename, so we try that first.
 	err = OS::get_singleton()->open_dynamic_library(abs_path, library, &data);
 	if (err != OK) {
@@ -204,6 +205,12 @@ Error GDExtensionLibraryLoader::open_library(const String &p_path) {
 		err = OS::get_singleton()->open_dynamic_library(String(), library, &data);
 #endif
 
+=======
+	// Apple has a complex lookup system which goes beyond looking up the filename, so we try that first
+	err = OS::get_singleton()->open_dynamic_library(abs_path, library, &data);
+	if (err != OK) {
+		err = OS::get_singleton()->open_dynamic_library(String(), library, &data);
+>>>>>>> 7752dcda86f16f9fef8d9e01652767e87eabd7c4
 		if (err != OK) {
 			return err;
 		}
